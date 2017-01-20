@@ -1,0 +1,12 @@
+#
+# .bashrc commands for the Legion installation
+#
+
+# Here we assume that the Legion runtime has been installed in the $HOME
+# directory.  
+export LG_RT_DIR=$HOME/legion/runtime
+
+# For the Regent companion language.  Here we assume the LLVM distribution has been 
+# extracted in the $HOME directory.
+export PATH="$PATH:$HOME/clang+llvm-3.4.2-x86_64-apple-darwin10.9/bin"
+export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:clang+llvm-3.4.2-x86_64-apple-darwin10.9/lib"
