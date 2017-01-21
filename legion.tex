@@ -870,7 +870,7 @@ of Figure~\ref{fig:accessors}).
 \section{Fill Fields}
 \label{sec:fill}
 
-Initializing all instances of a particular field in a region to the same value is a common, and so Legion
+It is common to initialize all instances of a particular field in a region to the same value, and so Legion
 provides direct support for this idiom.  Figure~\ref{fig:fill} gives an excerpt from an example identical
 to the one in Figure~\ref{fig:accessors}, except that the initialization task has been replaced by a call to
 the runtime that fills every occurrence of {\tt FIELD\_A} with a default value.
@@ -902,7 +902,9 @@ is required).
 
 \item The fourth argument is the ID of the field to be initialized.
 
-\item The fifth argument is a buffer holding the initial value, and the sixth argument is the size of the buffer.  
+\item The fifth argument is a buffer holding the initial value.
+
+\item The sixth argument is the size of the buffer.  
 The {\tt fill\_field} call makes a copy of the buffer.
 
 \end{itemize}
