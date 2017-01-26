@@ -2,7 +2,13 @@ DOC=legion
 SHELL=/bin/bash
 
 # dependencies via include files
-INCLUDED_TEX = 
+INCLUDED_TEX = installation.tex \
+	       tasks.tex \
+	       regions.tex \
+	       partitioning.tex \
+	       mapping.tex \
+	       interop.tex \
+	       reference.tex
 INCLUDED_FIGS =  
 
 all: $(DOC).pdf 

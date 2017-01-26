@@ -1,0 +1,36 @@
+
+\chapter{Installation}
+\label{chap:start}
+
+The Legion homepage is \url{legion.stanford.edu}.  Here you will find
+links to everything associated with the project, including a set of
+tutorials that are distinct from this manual.  The Legion distribution is at
+\url{https://github.com/StanfordLegion/legion}.  The distribution has been
+tested on Linux machines and Mac OS X.  To install, in a shell type
+\begin{lstlisting}[language=bash]
+> cd DIR
+> git clone https://github.com/StanfordLegion/legion
+\end{lstlisting}
+where {\tt DIR} is a directory of your choice.  This command creates 
+the directory {\tt DIR/legion}.  To complete the installation,
+set the environment variable {\tt LG\_RT\_DIR} to {\tt DIR/legion/runtime}.
+For {\tt bash} users, an example {\tt .bashrc} is included in
+\legionbook{Installation}.
+
+\section{Regent}
+
+If only the Legion \Cpp\ runtime is desired, there is no need to install Regent, the companion
+Legion programming language, and this section can be ignored.  To install Regent, download LLVM
+from the following URL
+{\small\url{http://llvm.org/releases/3.4.2/clang+llvm-3.4.2-x86_64-apple-darwin10.9.xz}}
+and extract it in a directory of your choice:
+{\small
+\begin{verbatim}
+> cd DIR
+> tar xf http://llvm.org/releases/3.4.2/clang+llvm-3.4.2-x86_64-apple-darwin10.9.xz
+\end{verbatim}
+}
+You must then put the LLVM {\tt bin} directory in your search {\tt
+  PATH} and the LLVM {\tt lib} in yor {\tt DYD\_LIBRARY\_PATH}.  The
+example {\tt .bashrc} file in \legionbook{Installation} contains the
+necessary commands for {\tt bash} users.
