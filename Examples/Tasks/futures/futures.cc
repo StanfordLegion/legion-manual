@@ -1,7 +1,7 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
 
 // All tasks must have a unique task id (a small integer).
 // A global enum is a convenient way to assign task ids.
@@ -14,7 +14,7 @@ enum TaskID {
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
-		    HighLevelRuntime *runtime)
+		    Runtime *runtime)
 {
   printf("Top level task start.\n");
   for(int i = 1; i <= 100; i += 2) {
@@ -30,7 +30,7 @@ void top_level_task(const Task *task,
 int subtask_producer(const Task *task,
 		      const std::vector<PhysicalRegion> &regions,
 		      Context ctx, 
-		      HighLevelRuntime *runtime)
+		      Runtime *runtime)
 {
   int subtask_number = *((int *) task->args);
   printf("\tProducer subtask %d\n", subtask_number);
@@ -40,7 +40,7 @@ int subtask_producer(const Task *task,
 void subtask_consumer(const Task *task,
 		     const std::vector<PhysicalRegion> &regions,
 		     Context ctx, 
-		     HighLevelRuntime *runtime)
+		     Runtime *runtime)
 {
   Future f = task->futures[0];
   int subtask_number = f.get_result<int>();
@@ -49,18 +49,18 @@ void subtask_consumer(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  HighLevelRuntime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<int,subtask_producer>(SUBTASK_PRODUCER_ID,
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  Runtime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
+                                                Processor::LOC_PROC, 
+                                                true/*single launch*/, 
+                                                false/*no multiple launch*/);
+  Runtime::register_legion_task<int,subtask_producer>(SUBTASK_PRODUCER_ID,
 						      Processor::LOC_PROC, 
 						      true/*single launch*/, 
 						      false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<subtask_consumer>(SUBTASK_CONSUMER_ID,
+  Runtime::register_legion_task<subtask_consumer>(SUBTASK_CONSUMER_ID,
 						  Processor::LOC_PROC, 
 						  true/*single launch*/, 
 						  false/*no multiple launch*/);
-  return HighLevelRuntime::start(argc, argv);
+  return Runtime::start(argc, argv);
 }

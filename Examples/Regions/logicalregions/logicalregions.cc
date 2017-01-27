@@ -1,7 +1,8 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
+using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
@@ -14,7 +15,7 @@ enum FieldIDs {
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
-		    HighLevelRuntime *runtime)
+		    Runtime *runtime)
 {
   // create a structured index space
   Rect<1> rec(Point<1>(0),Point<1>(99));
@@ -41,10 +42,10 @@ void top_level_task(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  HighLevelRuntime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  return HighLevelRuntime::start(argc, argv);
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  Runtime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
+                                                Processor::LOC_PROC, 
+                                                true/*single launch*/, 
+                                                false/*no multiple launch*/);
+  return Runtime::start(argc, argv);
 }

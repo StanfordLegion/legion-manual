@@ -1,7 +1,8 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
+
 enum TaskID {
   SUM_ID,
   SUM_TREE_ID,
@@ -26,7 +27,7 @@ int *sum_arg(int low, int high) {
 void sum_task(const Task *task,
 	      const std::vector<PhysicalRegion> &regions,
 	      Context ctx, 
-	      HighLevelRuntime *runtime)
+	      Runtime *runtime)
 {
   int high = 1000;
   const InputArgs &command_args = HighLevelRuntime::get_input_args();
@@ -56,7 +57,7 @@ void sum_task(const Task *task,
 int sum_tree_task(const Task *task,
 		  const std::vector<PhysicalRegion> &regions,
 		  Context ctx, 
-		  HighLevelRuntime *runtime) {
+		  Runtime *runtime) {
   int *range  = (int *) task->args;
   int low = range[0];
   int high = range[1];
@@ -84,15 +85,15 @@ int sum_tree_task(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(SUM_ID);
-  HighLevelRuntime::register_legion_task<sum_task>(SUM_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<int,sum_tree_task>(SUM_TREE_ID,
-							Processor::LOC_PROC, 
-							true/*single launch*/, 
-							false/*no multiple launch*/);
+  Runtime::set_top_level_task_id(SUM_ID);
+  Runtime::register_legion_task<sum_task>(SUM_ID,
+                                          Processor::LOC_PROC, 
+                                          true/*single launch*/, 
+                                          false/*no multiple launch*/);
+  Runtime::register_legion_task<int,sum_tree_task>(SUM_TREE_ID,
+                                                   Processor::LOC_PROC, 
+                                                   true/*single launch*/, 
+                                                   false/*no multiple launch*/);
 
-  return HighLevelRuntime::start(argc, argv);
+  return Runtime::start(argc, argv);
 }
