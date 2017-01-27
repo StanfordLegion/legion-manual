@@ -179,7 +179,7 @@ using namespace LegionRuntime::Accessor;
 
 void sum_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, HighLevelRuntime *runtime)
+		    Context ctx, Runtime *runtime)
 {
   FieldID fid = FIELD_A;
   RegionAccessor<AccessorType::Generic, int> acc =
