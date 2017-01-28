@@ -74,13 +74,15 @@ void inc_task_field_both(const Task *task,
 int main(int argc, char **argv)
 {
   Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  Runtime::register_legion_task<inc_task_field_both>(INC_TASK_ID_BOTH,
-                                                     Processor::LOC_PROC, 
-                                                     true/*single launch*/, 
-                                                     false/*no multiple launch*/);
-  Runtime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-                                                Processor::LOC_PROC, 
-                                                true/*single launch*/, 
-                                                false/*no multiple launch*/);
+  {
+    TaskVariantRegistrar registrar(INC_TASK_ID_BOTH, "inc_both_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<inc_task_field_both>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
   return Runtime::start(argc, argv);
 }

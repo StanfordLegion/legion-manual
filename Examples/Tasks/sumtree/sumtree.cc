@@ -86,14 +86,15 @@ int sum_tree_task(const Task *task,
 int main(int argc, char **argv)
 {
   Runtime::set_top_level_task_id(SUM_ID);
-  Runtime::register_legion_task<sum_task>(SUM_ID,
-                                          Processor::LOC_PROC, 
-                                          true/*single launch*/, 
-                                          false/*no multiple launch*/);
-  Runtime::register_legion_task<int,sum_tree_task>(SUM_TREE_ID,
-                                                   Processor::LOC_PROC, 
-                                                   true/*single launch*/, 
-                                                   false/*no multiple launch*/);
-
+  {
+    TaskVariantRegistrar registrar(SUM_ID, "sum");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<sum_task>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(SUM_TREE_ID, "sum_tree");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<int,sum_tree_task>(registrar);
+  }
   return Runtime::start(argc, argv);
 }

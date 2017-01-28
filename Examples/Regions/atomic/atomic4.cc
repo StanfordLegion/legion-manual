@@ -128,18 +128,17 @@ bool RoundRobinMapper::map_task(Task *task)
 int main(int argc, char **argv)
 {
   Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  Runtime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-                                                Processor::LOC_PROC, 
-                                                true/*single launch*/, 
-                                                false/*no multiple launch*/);
-  Runtime::register_legion_task<inc_task>(TASK_INC,
-                                          Processor::LOC_PROC, 
-                                          true/*single launch*/, 
-                                          false/*no multiple launch*/,
-                                          AUTO_GENERATE_ID,
-                                          TaskConfigOptions(true,false,false)
-                                          );
-
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(TASK_INC, "inc_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.set_leaf();
+    Runtime::preregister_task_variant<inc_task>(registrar);
+  }
   Runtime::set_registration_callback(mapper_registration);
 
   return Runtime::start(argc, argv);

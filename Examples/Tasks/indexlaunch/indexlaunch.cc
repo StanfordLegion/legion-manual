@@ -63,17 +63,20 @@ void subtask_consumer(const Task *task,
 int main(int argc, char **argv)
 {
   Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  Runtime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-                                                Processor::LOC_PROC, 
-                                                true/*single launch*/, 
-                                                false/*no multiple launch*/);
-  Runtime::register_legion_task<int,subtask_producer>(INDEX_PRODUCER_ID,
-                                                      Processor::LOC_PROC, 
-                                                      false/*single launch*/, 
-                                                      true/*no multiple launch*/);
-  Runtime::register_legion_task<subtask_consumer>(INDEX_CONSUMER_ID,
-                                                  Processor::LOC_PROC, 
-                                                  false/*single launch*/, 
-                                                  true/*no multiple launch*/);
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(INDEX_PRODUCER_ID, "index_producer");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<int,subtask_producer>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(INDEX_CONSUMER_ID, "index_consumer");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<subtask_consumer>(registrar);
+  }
   return Runtime::start(argc, argv);
 }
