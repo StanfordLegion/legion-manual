@@ -3,6 +3,7 @@
 #include "default_mapper.h"
 
 using namespace Legion;
+using namespace Legion::Mapping;
 using namespace LegionRuntime::Accessor;
 using namespace LegionRuntime::Arrays;
 
@@ -85,89 +86,36 @@ void subtask_consumer(const Task *task,
 
 class RoundRobinMapper : public DefaultMapper {
 public:
-  RoundRobinMapper(Machine machine,
-		    Runtime *rt, Processor local);
-  virtual void select_task_options(Task *task);
-//  virtual void slice_domain(const Task *task, const Domain &domain,
-//                            std::vector<DomainSplit> &slices);
-  virtual bool map_task(Task *task);
-//  virtual void notify_mapping_result(const Mappable *mappable);
-private:
-  int next_proc;
+  RoundRobinMapper(MapperRuntime *rt, Machine machine, Processor local);
+  virtual void select_task_options(const MapperContext ctx,
+                                   const Task& task, 
+                                         TaskOptions &options);
 };
 
-RoundRobinMapper::RoundRobinMapper(Machine m,
-				   Runtime *rt, Processor p)
-  : DefaultMapper(m, rt, p) // pass arguments through to DefaultMapper                                                                                                                                
+RoundRobinMapper::RoundRobinMapper(MapperRuntime *rt, Machine m, Processor p)
+  : DefaultMapper(rt, m, p) // pass arguments through to DefaultMapper
 {
-  next_proc = 0;
 }
 
 void mapper_registration(Machine machine, Runtime *rt,
 			 const std::set<Processor> &local_procs)
 {
+  MapperRuntime *const map_rt = rt->get_mapper_runtime();
   for (std::set<Processor>::const_iterator it = local_procs.begin();
        it != local_procs.end(); it++)
     {
-      rt->replace_default_mapper(new RoundRobinMapper(machine, rt, *it), *it);
+      rt->replace_default_mapper(new RoundRobinMapper(map_rt, machine, *it), *it);
     }
 }
 
-void RoundRobinMapper::select_task_options(Task *task)
+void RoundRobinMapper::select_task_options(const MapperContext  ctx,
+                                           const Task&          task,
+                                                 TaskOptions&   options)
 {
-  task->inline_task = false;
-  task->spawn_task = false;
-  task->map_locally = false;
-  task->profile_task = false;
-  task->task_priority = 0;
-
-  std::set<Processor> all_procs;
-  machine.get_all_processors(all_procs);
-  std::vector<Processor> valid_options;
-
-  for (std::set<Processor>::const_iterator it = all_procs.begin(); it != all_procs.end(); it++) {
-    if (it->kind() == Processor::LOC_PROC) {
-      valid_options.push_back(*it);
-    }
-  }
-  if (!valid_options.empty()) {
-    if (valid_options.size() > next_proc) {
-      task->target_proc = valid_options[next_proc++];
-    }
-    else {
-      task->target_proc = valid_options[0];
-      next_proc = 1;
-    }
-  }
-  else
-    task->target_proc = Processor::NO_PROC;
-}
-
-bool RoundRobinMapper::map_task(Task *task)
-{
-  //  std::set<Memory> vis_mems;
-  //  machine.get_visible_memories(task->target_proc, vis_mems);
-  //  assert(!vis_mems.empty());
-  for (unsigned idx = 0; idx < task->regions.size(); idx++)
-    {
-      if (task->regions[idx].current_instances.size() > 0) {
-	assert(task->regions[idx].current_instances.size() == 1);
-	task->regions[idx].target_ranking.push_back(
-						    (task->regions[idx].current_instances.begin())->first);
-      }
-      else
-	{
-	  Memory global = machine_interface.find_global_memory();
-	  assert(global.exists());
-	  task->regions[idx].target_ranking.push_back(global);
-	}
-      task->regions[idx].virtual_map = false;
-      task->regions[idx].enable_WAR_optimization = false;
-      task->regions[idx].reduction_list = false;
-      task->regions[idx].blocking_factor = 1;
-    }
-  // Report successful mapping results                                                                                                                                                                
-  return true;
+  options.initial_proc = default_get_next_global_cpu();
+  options.inline_task = false;
+  options.stealable = false;
+  options.map_locally = false;
 }
 
 

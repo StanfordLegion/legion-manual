@@ -189,12 +189,12 @@ int main(int argc, char **argv)
   {
     TaskVariantRegistrar registrar(INC_TASK_ID_FIELDA, "inc_field_A");
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<int_task_fielda_only>(registrar);
+    Runtime::preregister_task_variant<inc_task_fielda_only>(registrar);
   }
   {
     TaskVariantRegistrar registrar(INC_TASK_ID_FIELDB, "inc_field_B");
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<int_task_fieldb_only>(registrar);
+    Runtime::preregister_task_variant<inc_task_fieldb_only>(registrar);
   }
   {
     TaskVariantRegistrar registrar(INC_TASK_ID_BOTH, "inc_both");
