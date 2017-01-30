@@ -1,2 +1,258 @@
 \chapter{Mapping}
 \label{chap:mapping}
+The Legion mapper interface is one of the most important parts
+of the Legion programming system. Through it, all (and we really
+do mean {\em ALL}) possible decisions that can impact performance
+are exposed.  The Legion runtime has absolutely {\em no} internal 
+heuristics that will aid users in achieving good or even reasonable
+performance. It is solely the responsibility of the user to make
+good mapping decisions to ensure high performance.
+
+It is important to note that this is fundamental tenant of the system: 
+Legion is designed for expert users such as library authors and domain
+specific language developers that understand precisely how a program
+should execute on real hardware and do not want any interference from
+the system in getting what they want\footnote{In our own experiences 
+with large programming systems, we have often encoutered scenarios where 
+either a static or a dynamic scheduler did not behave as we wanted,
+but we had no means of recourse to address the problems. The heuristics in  
+the Linux thread scheduler and the PTX assembler in the CUDA compiler 
+are two particularly egregious examples that have confounded us in many ways
+in the past. We want all expert users of Legion to have absoulte and total 
+control over how a program executes so they never have to suffer the same fate.}.
+This level of control can be overwheling at first to users who are not used to
+considering all the possible dimensions that influence performance in large
+distributed and heterogeneous systems.
+
+In order to avoid users having to deal with this complexity initially, we
+provide a default implementation of this interface that we refer to as the
+{\em default mapper}. We will use several examples from the default mapper
+when discussing how mappers are constructed. We will also describe where
+possible the heuristics that the default mapper employs in order to get 
+reasonable performance. We caution however that the default mapper is unlikely
+to get true speed-of-light performance for any real application as its 
+heurisitcs will likely make poor decisions during some phase of each 
+application. Performance benchmarking using only the default mapper is strongly
+discouraged, while using custom mappers that extend the default mapper are
+completely reasonable. We promise that it will not be long into your use of 
+Legion that there will come a moment when you will be dissatisfied with the 
+heuristics in the default mapper. At that time, you will be grateful that the 
+heuristic is not baked into the internals of the runtime, and that you have 
+a means to remedy the situation yourself by writing a custom implementation of 
+a mapper function without needing to dig into the internals of the runtime.
+
+\section{Mapper Organization}
+\label{sec:mapping:org}
+
+The Legion mapper interface is an abstract C++ class that defines a set of 
+pure virtual functions that the Legion runtime can invoke as callbacks
+for making performance related decisions. A Legion mapper is therefore 
+simply a class that inherits from the base abstract class and provides 
+implementations of the associated pure virtual methods.
+
+\subsection{Mapper Registration}
+\label{subsec:mapping:registration}
+
+After the Legion runtime is created, but before the application itself
+begins, the user is given the opportunity to register mapper objects 
+with the runtime. Figure~\ref{fig:mapper_registration} gives a small
+example demonstrating how to register a custom mapper with the runtime.
+
+\begin{figure}
+\begin{lstlisting}
+#include <cstdio>
+#include "legion.h"
+#include "default_mapper.h"
+
+using namespace Legion;
+using namespace Legion::Mapping;
+
+// All tasks must have a unique task id (a small integer).
+// A global enum is a convenient way to assign task ids.
+enum TaskID {
+  TOP_LEVEL_TASK_ID,
+};
+
+void top_level_task(const Task *task,
+		    const std::vector<PhysicalRegion> &regions,
+		    Context ctx, 
+		    Runtime *runtime)
+{
+  printf("Running top level task...\n");
+}
+
+class CustomMapperA : public DefaultMapper {
+public:
+  CustomMapperA(MapperRuntime *rt, Machine m, Processor p)
+    : DefaultMapper(rt, m, p) { }
+public:
+  static void register_custom_mappers(Machine machine, Runtime *rt,
+                                      const std::set<Processor> &local_procs);
+};
+
+/*static*/
+void CustomMapperA::register_custom_mappers(Machine machine, Runtime *rt,
+                                            const std::set<Processor> &local_procs)
+{
+  printf("Replacing default mappers with custom mapper A on all processors...\n");
+  MapperRuntime *const map_rt = rt->get_mapper_runtime();
+  for (std::set<Processor>::const_iterator it = local_procs.begin();
+       it != local_procs.end(); it++)
+    {
+      rt->replace_default_mapper(new CustomMapperA(map_rt, machine, *it), *it);
+    }
+}
+
+class CustomMapperB : public DefaultMapper {
+public:
+  CustomMapperB(MapperRuntime *rt, Machine m, Processor p)
+    : DefaultMapper(rt, m, p) { }
+public:
+  static void register_custom_mappers(Machine machine, Runtime *rt,
+                                      const std::set<Processor> &local_procs);
+};
+
+/*static*/
+void CustomMapperB::register_custom_mappers(Machine machine, Runtime *rt,
+                                            const std::set<Processor> &local_procs) 
+{
+  printf("Adding custom mapper B for all processors...\n");
+  MapperRuntime *const map_rt = rt->get_mapper_runtime();
+  for (std::set<Processor>::const_iterator it = local_procs.begin();
+       it != local_procs.end(); it++)
+    {
+      rt->add_mapper(1/*MapperID*/, new CustomMapperA(map_rt, machine, *it), *it);
+    }
+}
+
+int main(int argc, char **argv)
+{
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  Runtime::add_registration_callback(CustomMapperA::register_custom_mappers);
+  Runtime::add_registration_callback(CustomMapperB::register_custom_mappers);
+
+  return Runtime::start(argc, argv);
+}
+\end{lstlisting}
+\caption{\legionbook{Mapping/registration/registration.cc}}
+\label{fig:mapper_registration}
+\end{figure}
+
+In order to register the {\tt CustomMapper} objects with the runtime, the
+application first adds the mapper callback function by invoking the
+{\tt Runtime::add\_registration\_callback} method which takes as an
+argument a function pointer to be invoked. The function pointer must
+have a specific type taking as arguments a {\tt Machine} object, 
+a {\tt Runtime} pointer, and a reference to an STL set of {\tt Processor}
+objects. The call can be invoked multiple times to record multiple
+callback functions (e.g., to register multiple custom mappers). All
+callback functions must be added prior to the invocation of the 
+{\tt Runtime::start} method. We recommend that users make the registration
+method a static method on the mapper class as is done in this example
+so that it is closely coupled with the actual mapper itself.
+
+Before invoking any of the callback functions, the runtime will first
+create an instance of the default mapper for each processor throughout
+the system. The runtime then invokes the callback functions in the order
+that they were added. Each callback function is invoked once on each 
+instance of the Legion runtime. For multi-process jobs, there will be 
+one copy of the Legion runtime per process and therefore one invocation
+of each callback per process. The set or processors passed into each 
+registration callback function will be the set of application processors 
+that are local to the process\footnote{Mappers cannot be associated with
+utility processors, and therefore utility processors are not included
+in the set.}, thereby providing the registration callback
+functions with the necessary context to know which processors it will
+be responsible for in terms of creating new custom mappers. Note that
+Note that if no callback functions are registered then the only mappers
+that will be available are instances of the default mapper associated
+with each application processor.
+
+Upon invocation, the registration callbacks should create instances
+of custom mappers and associate them with application processors. 
+This can be done through one of two runtime mapper calls. The mapper
+can replace the default mappers (always registered with {\tt MapperID}
+0) by calling {\tt Runtime::replace\_default\_mapper}). This is the
+only way to replace the default mappers. Alternatively, the registration
+callback can use {\tt Runtime::add\_mapper} to register a mapper with a
+new {\tt MapperID}. Both the {\tt Runtime::replace\_default\_mapper} and
+the {\tt Runtime::add\_mapper} methods support an optional processor
+argument, which tells the runtime to associate the mapper with a specific
+processor. If no processor is specified, the mapper will be associated 
+with all processors on the local node. This is a mapper specific choice:
+whether one mapper object should handle a single application processor's
+mapping decisions, or whether it should handle the mapping decisions for
+all application processors on a node. Legion supports both use cases
+and it is up to custom mappers to make the best choice. From a performance
+perspective, the best choice is likely to rely upon the mapper synchronization
+model that is chosen as we will discuss in Section~\ref{subsec:mapping:sync}.
+
+When creating custom mappers, the registration callback should get a pointer
+to the {\tt MapperRuntime} and pass it as an argument to all mapper objects.
+The mapper runtime will provide the interface for mapper calls to call back
+into the runtime to acquire access to different physical resources. We 
+will see instances of the use of the mapper runtime throughout the rest of
+the examples in this chapter.
+
+\subsection{Synchronization Model}
+\label{subsec:mapping:sync}
+
+\subsection{Machine Interface}
+\label{subsec:mapping:machine}
+
+
+
+\section{Mapping Tasks}
+\label{sec:mapping:tasks}
+
+\subsection{Task Placement}
+\label{subsec:mapping:placement}
+
+\subsection{Selecting Task Variants}
+\label{subsec:mapping:variants}
+
+\subsection{Creating Physical Instances}
+\label{subsec:mapping:instances}
+
+\subsection{Using Virtual Mappings}
+\label{subsec:mapping:virtual}
+
+\subsection{Profiling Requests}
+\label{subsec:mapping:profiling}
+
+\subsection{Resilience Support}
+\label{subsec:mapping:resilience}
+
+
+
+\section{Mapping Other Operations}
+\label{sec:mapping:others}
+
+\subsection{Mapping Copies}
+\label{subsec:mapping:copies}
+
+\subsection{Mapping Acquires and Releases}
+\label{subsec:mapping:acquires}
+
+\subsection{Mapping Must Epoch Launches}
+\label{subsec:mapping:mustepoch}
+
+
+
+\section{Managing Execution}
+\label{sec:mapping:execution}
+
+\subsection{Context Management}
+\label{subsec:mapping:context}
+
+\subsection{Mapper Communication}
+\label{subsec:mapping:communication}
+
+\subsection{Controlling Stealing}
+\label{subsec:mapping:stealing}
+

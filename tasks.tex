@@ -1,6 +1,21 @@
 \chapter{Tasks}
 \label{chap:tasks}
 
+% Set up the listing configuration for everything
+\lstset{
+  captionpos=b,
+  language=C++,
+  basicstyle=\scriptsize,
+  numbers=left,
+  numberstyle=\tiny,
+  columns=fullflexible,
+  stepnumber=1,
+  escapechar=\#,
+  keepspaces=true,
+  literate={<}{{$\langle$}}1 {>}{{$\rangle$}}1,
+  %xleftmargin=15pt,
+}
+
 The Legion runtime is a \Cpp\ library, and
 Legion programs are just C++ programs that use the Legion runtime API.
 One important consequence of this design is that almost all Legion decisions
