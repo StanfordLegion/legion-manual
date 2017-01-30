@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     Runtime::preregister_task_variant<subtask_consumer>(registrar);
   }
-  Runtime::set_registration_callback(mapper_registration);
+  Runtime::add_registration_callback(mapper_registration);
 
   return Runtime::start(argc, argv);
 }

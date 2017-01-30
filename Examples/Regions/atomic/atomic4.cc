@@ -116,7 +116,7 @@ int main(int argc, char **argv)
     registrar.set_leaf();
     Runtime::preregister_task_variant<inc_task>(registrar);
   }
-  Runtime::set_registration_callback(mapper_registration);
+  Runtime::add_registration_callback(mapper_registration);
 
   return Runtime::start(argc, argv);
 }
