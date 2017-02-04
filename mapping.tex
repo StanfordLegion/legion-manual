@@ -60,19 +60,6 @@ example demonstrating how to register a custom mapper with the runtime.
 
 \begin{figure}
 \begin{lstlisting}
-#include <cstdio>
-#include "legion.h"
-#include "default_mapper.h"
-
-using namespace Legion;
-using namespace Legion::Mapping;
-
-// All tasks must have a unique task id (a small integer).
-// A global enum is a convenient way to assign task ids.
-enum TaskID {
-  TOP_LEVEL_TASK_ID,
-};
-
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
@@ -177,7 +164,7 @@ Upon invocation, the registration callbacks should create instances
 of custom mappers and associate them with application processors. 
 This can be done through one of two runtime mapper calls. The mapper
 can replace the default mappers (always registered with {\tt MapperID}
-0) by calling {\tt Runtime::replace\_default\_mapper}). This is the
+0) by calling {\tt Runtime::replace\_default\_mapper}. This is the
 only way to replace the default mappers. Alternatively, the registration
 callback can use {\tt Runtime::add\_mapper} to register a mapper with a
 new {\tt MapperID}. Both the {\tt Runtime::replace\_default\_mapper} and
@@ -202,9 +189,161 @@ the examples in this chapter.
 \subsection{Synchronization Model}
 \label{subsec:mapping:sync}
 
+Inside of the Legion runtime, there are often several different threads
+performing the program analysis necessary to advance the execution of a
+application. If some threads are performing work for operations 
+owned by the same mapper, it is possible that they will attempt to 
+invoke mapper calls for the same mapper object concurrently. For both 
+productivity and correctness reasons, we do not want users having to be
+responsible for making their mappers thread-safe. Therefore we allow
+mappers to specify a {\em synchronization model} which the runtime will
+follow when concurrent mapper calls need to be made.
+
+Each mapper object can specify its own synchronization model via the
+{\tt get\_mapper\_sync\_model} mapper call. The runtime will invoke this
+method exactly once per mapper object immediately after the mapper is
+registered with the runtime. Once the synchronization model has been set
+for a mapper object it cannot be changed. There are currently three
+different synchronization models supported by the runtime.
+
+\begin{itemize}
+\item Serialized Non-Reentrant - Ensure that all mapper calls to the
+      mapper object are serialized and execute atomically. If the mapper 
+      calls out to the runtime and the mapper call is preempted, then 
+      no other mapper calls will be allowed to be invoked by the runtime.
+      This synchronization model conforms with the original version of
+      the Legion mapper interface.
+\item Serialized Reentrant - Ensure that at most one mapper call is 
+      executing at a time. However, if a mapper call invokes a runtime
+      method that preempts the mapper call, then the runtime can either
+      start executing another mapper call or resume a previously blocked
+      one. It is up to the user to handle any changes in internal mapper
+      state that might occur while a mapper call is preempted (e.g., the
+      invalidation of STL iterators to internal mapper data structures).
+\item Concurrent - Permit all mapper calls to the same mapper object to
+      proceed concurrently. Users can invoke the {\tt lock\_mapper} and
+      {\tt unlock\_mapper} calls to perform their own synchronization
+      of the mapper. This synchronization model is also very useful for
+      mappers that encode mainly static mapping decisions and simply
+      need to report their results without changing internal mapper state.
+\end{itemize}
+
+The mapper synchronization models affords mappers the choice of much
+complexity they are willing to accept when dealing with concurrency of
+mapper calls. For reference, the current default mapper uses the 
+serialized reentrant synchronization model as it offers a good trade-off
+between programmability and performance.
+
 \subsection{Machine Interface}
 \label{subsec:mapping:machine}
 
+In order to make decisions regarding policy, it is crucial that the mapper
+interface have a way to introspect the underlying machine architecture.
+All mappers are therefore given a {\tt Machine} object as an interface
+for introspecting the hardware on which the program is executing. The
+{\tt Machine} object is actually a Realm level object which we directly
+expose to the mapper. The declaration of the interface for the {\tt Machine}
+object can therefore be found in the realm/machine.h file.
+
+There are effectively two different interfaces for querying the machine
+object. The old interface contains methods such as {\tt get\_all\_processors}
+and {\tt get\_all\_memories}. These methods populate STL data structures
+with the appropriate names of processors and memories directly. We {\bf strongly}
+discourage users from using these methods as they are not scalable on large
+architectures where there may literally be tens to hundreds of thousands of
+processors or memories.
+
+We also provide a much more efficient and scalable internface as an alternative
+to the old machine interface. This interface is based on the concept of a 
+{\em query}. There are two types of queries: {\tt ProcessorQuery} and 
+{\tt MemoryQuery}. Each query is initially given a reference to the machine
+object. After initialization the query will lazily represent the entire set of 
+either processors or memories in the machine depending on the query type.
+The mapper can then apply various {\em filters} to the query to reduce the
+set of processor or memories of interest.  These filters can include specializing
+the query on the kind of processors with the {\tt only\_kind} method or by
+requesting that the processor or memory have a specific affinity to another
+processor or memory with the {\tt has\_affinity\_to}. Affinity can either be
+specified as a minimum bandwidth or a maximum latency. Figure~\ref{fig:mapper_machine}
+shows how to create a custom mapper that uses queries to find local set of 
+processors with the same kind and the memories with affinities to the local
+mapper processor. In some cases, these queries can still be expensive, so we
+encourage the creation of mappers that memoize the results of their most 
+commonly invoked queries to avoid duplicated work.
+
+\begin{figure}
+\begin{lstlisting}
+void top_level_task(const Task *task,
+		    const std::vector<PhysicalRegion> &regions,
+		    Context ctx, 
+		    Runtime *runtime)
+{
+  printf("Running top level task...\n");
+}
+
+class MachineMapper : public DefaultMapper {
+public:
+  MachineMapper(MapperRuntime *rt, Machine m, Processor p);
+public:
+  static void register_machine_mappers(Machine machine, Runtime *rt,
+                                       const std::set<Processor> &local_procs);
+};
+
+MachineMapper::MachineMapper(MapperRuntime *rt, Machine m, Processor p)
+  : DefaultMapper(rt, m, p)
+{
+  // Find all processors of the same kind on the local node
+  Machine::ProcessorQuery proc_query(m);
+  // First restrict to the same node
+  proc_query.local_address_space();
+  // Make it the same processor kind as our processor
+  proc_query.only_kind(p.kind());
+  for (Machine::ProcessorQuery::iterator it = proc_query.begin(); 
+        it != proc_query.end(); it++)
+  {
+    // skip ourselves
+    if ((*it) == p)
+      continue;
+    printf("Mapper %s: shares " IDFMT "\n", get_mapper_name(), it->id);
+  }
+  // Find all the memories that are visible from this processor
+  Machine::MemoryQuery mem_query(m);
+  // Find affinity to our local processor
+  mem_query.has_affinity_to(p);
+  for (Machine::MemoryQuery::iterator it = mem_query.begin();
+        it != mem_query.end(); it++)
+    printf("Mapper %s: has affinity to memory " IDFMT "\n", get_mapper_name(), it->id);
+}
+
+/*static*/
+void MachineMapper::register_machine_mappers(Machine machine, Runtime *rt,
+                                             const std::set<Processor> &local_procs)
+{
+  printf("Replacing default mappers with custom mapper A on all processors...\n");
+  MapperRuntime *const map_rt = rt->get_mapper_runtime();
+  for (std::set<Processor>::const_iterator it = local_procs.begin();
+       it != local_procs.end(); it++)
+    {
+      rt->replace_default_mapper(new MachineMapper(map_rt, machine, *it), *it);
+    }
+}
+
+int main(int argc, char **argv)
+{
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  Runtime::add_registration_callback(MachineMapper::register_machine_mappers);
+
+  return Runtime::start(argc, argv);
+}
+\end{lstlisting}
+\caption{\legionbook{Mapping/machine/machine.cc}}
+\label{fig:mapper_machine}
+\end{figure}
 
 
 \section{Mapping Tasks}
