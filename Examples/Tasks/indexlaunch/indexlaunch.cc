@@ -24,7 +24,7 @@ void top_level_task(const Task *task,
   for (int i = 0; i < points; i += 1)
   {
     int subtask_id = 2*i;
-    producer_arg_map.set_point(DomainPoint::from_point<1>(Point<1>(i)),
+    producer_arg_map.set_point(DomainPoint::from_point<1>(Point<1>(i+1)),
 			       TaskArgument(&subtask_id,sizeof(int)));
   }
   IndexLauncher producer_launcher(INDEX_PRODUCER_ID,
@@ -32,7 +32,7 @@ void top_level_task(const Task *task,
 				  TaskArgument(NULL, 0),
 				  producer_arg_map);
   FutureMap fm = runtime->execute_index_space(ctx, producer_launcher);
-  ArgumentMap consumer_arg_map = fm.convert_to_argument_map();
+  ArgumentMap consumer_arg_map(fm);
   IndexLauncher consumer_launcher(INDEX_CONSUMER_ID,
 				  launch_domain,
 				  TaskArgument(NULL, 0),
@@ -55,8 +55,7 @@ void subtask_consumer(const Task *task,
 		      Context ctx,
 		      Runtime *runtime)
 {
-  Future f = *((const Future *)task->local_args);
-  int subtask_number = f.get_result<int>();
+  int subtask_number = *((const int*)task->local_args);
   printf("\tConsumer subtask %d\n", subtask_number);
 }
 
