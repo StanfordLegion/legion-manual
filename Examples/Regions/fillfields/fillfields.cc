@@ -1,8 +1,9 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
 using namespace LegionRuntime::Accessor;
+using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
@@ -16,7 +17,7 @@ enum FieldIDs {
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
-		    HighLevelRuntime *runtime)
+		    Runtime *runtime)
 {
   Rect<1> rec(Point<1>(0),Point<1>(99));
   IndexSpace sis = runtime->create_index_space(ctx,Domain::from_rect<1>(rec));
@@ -45,7 +46,7 @@ void top_level_task(const Task *task,
 
 void init_task(const Task *task,
                      const std::vector<PhysicalRegion> &regions,
-                     Context ctx, HighLevelRuntime *runtime)
+                     Context ctx, Runtime *runtime)
 {
   FieldID fid = FIELD_A;
   RegionAccessor<AccessorType::Generic, int> acc =
@@ -62,7 +63,7 @@ void init_task(const Task *task,
 
 void sum_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, HighLevelRuntime *runtime)
+		    Context ctx, Runtime *runtime)
 {
   FieldID fid = FIELD_A;
   RegionAccessor<AccessorType::Generic, int> acc =
@@ -81,14 +82,16 @@ void sum_task(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  HighLevelRuntime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-							 Processor::LOC_PROC, 
-							 true/*single launch*/, 
-							 false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<sum_task>(SUM_TASK_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  return HighLevelRuntime::start(argc, argv);
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(SUM_TASK_ID, "sum_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<sum_task>(registrar);
+  }
+  return Runtime::start(argc, argv);
 }

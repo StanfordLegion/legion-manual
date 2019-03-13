@@ -9,14 +9,14 @@ OUTPUT_LEVEL=LEVEL_DEBUG  # Compile time print level
 #ALT_MAPPERS=1		  # Compile the alternative mappers
 
 # Put the binary file name here
-OUTFILE		:= subtasks
+OUTFILE		:= machine 
 # List all the application source files here
-GEN_SRC		:= subtasks.cc			# .cc files
+GEN_SRC		:= machine.cc			# .cc files
 GEN_GPU_SRC	:=				# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
 INC_FLAGS	:=
-CC_FLAGS	?=
+CC_FLAGS	?= 
 NVCC_FLAGS	:=
 GASNET_FLAGS	:=
 LD_FLAGS	:=

@@ -1,7 +1,7 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
 
 // All tasks must have a unique task id (a small integer).
 // A global enum is a convenient way to assign task ids.
@@ -13,7 +13,7 @@ enum TaskID {
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
-		    HighLevelRuntime *runtime)
+		    Runtime *runtime)
 {
   printf("Top level task start.\n");
   for(int i = 1; i <= 100; i++) {
@@ -26,7 +26,7 @@ void top_level_task(const Task *task,
 void subtask(const Task *task,
 	     const std::vector<PhysicalRegion> &regions,
 	     Context ctx, 
-	     HighLevelRuntime *runtime)
+	     Runtime *runtime)
 {
   int subtask_number = *((int *) task->args);
   printf("\tSubtask %d\n", subtask_number);
@@ -34,14 +34,16 @@ void subtask(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  HighLevelRuntime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<subtask>(SUBTASK_ID,
-						   Processor::LOC_PROC, 
-						   true/*single launch*/, 
-						   false/*no multiple launch*/);
-  return HighLevelRuntime::start(argc, argv);
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(SUBTASK_ID, "subtask");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<subtask>(registrar);
+  }
+  return Runtime::start(argc, argv);
 }

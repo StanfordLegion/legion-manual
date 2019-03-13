@@ -1,8 +1,9 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace LegionRuntime::HighLevel;
+using namespace Legion;
 using namespace LegionRuntime::Accessor;
+using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
@@ -17,7 +18,7 @@ enum FieldIDs {
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
-		    HighLevelRuntime *runtime)
+		    Runtime *runtime)
 {
   Rect<1> rec(Point<1>(0),Point<1>(99));
   IndexSpace sis = runtime->create_index_space(ctx,Domain::from_rect<1>(rec));
@@ -51,7 +52,7 @@ void top_level_task(const Task *task,
 
 void inc_task_field_both(const Task *task,
 			 const std::vector<PhysicalRegion> &regions,
-			 Context ctx, HighLevelRuntime *runtime)
+			 Context ctx, Runtime *runtime)
 {
   RegionAccessor<AccessorType::Generic, int> acca =
     regions[0].get_field_accessor(FIELD_A).typeify<int>();
@@ -72,14 +73,16 @@ void inc_task_field_both(const Task *task,
 
 int main(int argc, char **argv)
 {
-  HighLevelRuntime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  HighLevelRuntime::register_legion_task<inc_task_field_both>(INC_TASK_ID_BOTH,
-							  Processor::LOC_PROC, 
-							  true/*single launch*/, 
-							  false/*no multiple launch*/);
-  HighLevelRuntime::register_legion_task<top_level_task>(TOP_LEVEL_TASK_ID,
-							  Processor::LOC_PROC, 
-							  true/*single launch*/, 
-							  false/*no multiple launch*/);
-  return HighLevelRuntime::start(argc, argv);
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+  {
+    TaskVariantRegistrar registrar(INC_TASK_ID_BOTH, "inc_both_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<inc_task_field_both>(registrar);
+  }
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar);
+  }
+  return Runtime::start(argc, argv);
 }
