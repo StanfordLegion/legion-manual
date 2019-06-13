@@ -1,19 +1,47 @@
 #include <cstdio>
 #include "legion.h"
 
-using namespace Legion;
-using namespace LegionRuntime::Arrays;
+//
+// Points and Rects are also defined in the Legion namespace, but for these examples we want the
+// definitions in LegionRuntime:Arrays.
+//
+using Legion::Domain;
+using Legion::DomainPoint;
+using Legion::PhysicalRegion;
+using Legion::Context;
+using Legion::Task;
+using Legion::HighLevelRuntime;
+using Legion::Runtime;
+using Legion::TaskVariantRegistrar;
+using Legion::Processor;
+using Legion::ProcessorConstraint;
+using LegionRuntime::Arrays::Point;
+using LegionRuntime::Arrays::coord_t;
+using LegionRuntime::Arrays::make_point;
+using LegionRuntime::Arrays::Rect;
 
 enum TaskID {
   TOP_LEVEL_TASK_ID,
 };
 
-void print_array(coord_t *a, int dim) {
+void print_point(DomainPoint d) {
   printf("The point is <");
-  for(int i = 0; i < dim-1; i++) {
-    printf("%zd,",a[i]);
-  }
-  printf("%zd>\n",a[dim-1]);
+  for(int i = 0; i <= d.dim - 1; i++) 
+    printf("%lld,",d[i]);
+  if (d.dim > 0) 
+    printf("%lld>\n",d[d.dim-1]);
+}
+
+void print_point1(Point<1> p) {
+  print_point(DomainPoint::from_point<1>(p));
+}
+
+void print_point2(Point<2> p) {
+  print_point(DomainPoint::from_point<2>(p));
+}
+
+void print_point3(Point<3> p) {
+  print_point(DomainPoint::from_point<3>(p));
 }
 
 void top_level_task(const Task *task,
@@ -23,28 +51,19 @@ void top_level_task(const Task *task,
   //
   // Point operations
   //
-  coord_t coords[3];
-  coord_t source[3];
-
   Point<1> one(1);
-  one.to_array(coords);
-  print_array(coords,1);
+  print_point1(one);
 
   Point<1> two(2);
-  two.to_array(coords);
-  print_array(coords,1);
+  print_point1(two);
 
-  (one + two).to_array(coords);
-  print_array(coords,1);
+  print_point1(one + two);
 
-  //  (one * two).to_array(coords);
-  //  print_array(coords,1);
-
+  coord_t source[3];
   source[0] = 0;
   source[1] = 0;
   Point<2> zero(source);
-  zero.to_array(coords);
-  print_array(coords,2);
+  print_point2(zero);
 
   Point<1> anotherone = make_point(1);
   Point<2> zeroes = make_point(0,0);
@@ -52,15 +71,13 @@ void top_level_task(const Task *task,
   Point<2> threes = make_point(3,3);
   Point<3> fours = make_point(4,4,4);
 
-  printf("The point is <%zd>\n",anotherone[0]);
-  printf("The point is <%zd,%zd>\n",twos[0],twos[1]);
-  printf("The point is <%zd,%zd>\n",threes[0],threes[1]);
-  printf("The point is <%zd,%zd,%zd>\n",fours[0],fours[1],fours[2]);
-  (twos + threes).to_array(coords);
-  print_array(coords,2);
-  (twos * threes).to_array(coords);
-  print_array(coords,2);
-  printf("The dot product is %zd\n",twos.dot(threes));
+  printf("The point is <%lld>\n",anotherone[0]);
+  printf("The point is <%lld,%lld>\n",twos[0],twos[1]);
+  printf("The point is <%lld,%lld>\n",threes[0],threes[1]);
+  printf("The point is <%lld,%lld,%lld>\n",fours[0],fours[1],fours[2]);
+  print_point2(twos + threes);
+  print_point2(twos * threes);
+  printf("The dot product is %lld\n",twos.dot(threes));
   
   assert(twos == twos);
   assert(twos != threes);
@@ -82,10 +99,6 @@ void top_level_task(const Task *task,
   //
   Domain bigdomain = Domain::from_rect<2>(big);
   DomainPoint dtwos = DomainPoint::from_point<2>(twos);
-
-  // useless statements to suppress warnings about unused variables
-  bigdomain = bigdomain;
-  dtwos = dtwos;
 
 }
 

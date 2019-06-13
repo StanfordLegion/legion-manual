@@ -86,7 +86,7 @@ At a high level, every Legion program has three components:
 \begin{itemize}
 \item The id of the top-level task must be set with Legion's {\em high level runtime}.  The top-level
 task is the initial task that is called when the Legion runtime starts.
-\item Every task and it's task id must be registered with the high level runtime.  Currently all tasks
+\item Every task and its task id must be registered with the high level runtime.  Currently all tasks
 must be registered before the runtime starts.
 \item The start method of the high level runtime is invoked, which in turn calls the top-level task.
 Note that by default this call does not return---the program is terminated when the start method terminates.

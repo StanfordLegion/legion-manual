@@ -2,7 +2,7 @@
 #include "legion.h"
 
 using namespace Legion;
-using namespace LegionRuntime::Arrays;
+//using namespace LegionRuntime::Arrays;
 
 // All tasks must have a unique task id (a small integer).
 // A global enum is a convenient way to assign task ids.
@@ -12,19 +12,23 @@ enum TaskID {
   INDEX_CONSUMER_ID,
 };
 
+class PCTask: public IndexLauncher {
+public:
+  PCTask(const Domain &launch_domain,
+	 const ArgumentMap &arg_map);
+public:
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
 		    Runtime *runtime)
 {
   int points = 50;
-  Rect<1> launch_bounds(Point<1>(1),Point<1>(points));
-  Domain launch_domain = Domain::from_rect<1>(launch_bounds);
+  const Rect<1> launch_domain(1,points);
   ArgumentMap producer_arg_map;
   for (int i = 0; i < points; i += 1)
   {
     int subtask_id = 2*i;
-    producer_arg_map.set_point(DomainPoint::from_point<1>(Point<1>(i+1)),
+    producer_arg_map.set_point(DomainPoint::from_point<1>(i+1),
 			       TaskArgument(&subtask_id,sizeof(int)));
   }
   IndexLauncher producer_launcher(INDEX_PRODUCER_ID,
