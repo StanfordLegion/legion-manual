@@ -6,7 +6,7 @@ examples in Chapter~\ref{chap:tasks} emphasized the use of futures, this was for
 simplicity.  As mentioned previously, futures are for passing small amounts of data
 between tasks; regions are for holding and processing bulk data.
 
-Because data placement and movement is crucial to performance in modern machines,
+Because data placement and movement are crucial to performance in modern machines,
 Legion provides extensive facilities for managing regions.  These features are a
 distinctive aspect of Legion and also probably the most novel and unfamiliar 
 to new Legion programmers.  Most programming systems attempt to hide the placement,
@@ -17,7 +17,7 @@ Figure~\ref{fig:lr1} shows a very simple program that
 creates a {\em logical region}.  A logical region is a table (or,
 equivalently, a relation), with an {\em index space} defining the rows
 and a {\em field space} defining the columns. The example
-in Figure~\ref{fig:lr1} has a number of details worth discussion:
+in Figure~\ref{fig:lr1} illustrates a number of points:
 
 \begin{itemize}
 
