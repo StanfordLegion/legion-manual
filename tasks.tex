@@ -31,11 +31,11 @@ Legion tasks have several important properties:
 \begin{itemize}
 \item Tasks are the unit of parallelism in Legion; all parallelism occurs because tasks are executed in parallel.
 
-\item Tasks are specific to a particular kind of {\em processor} (most commonly CPUs or GPUs), but a task can always be run on any processor
-of the correct kind.
+\item Tasks have {\em variants} specific to a particular kind of {\em processor} (most commonly CPUs or GPUs) and 
+memory layout of the task's arguments.  A task may have multiple variants.
 
-\item Once a processor is picked for a task, that task will execute in its entirety on that processor---tasks do
-not migrate.  
+\item Once a task begins execution on a processor, that task will execute in its entirety on that processor---tasks do
+not migrate mid-computation.  
 
 \end{itemize}
 
@@ -352,13 +352,12 @@ Legion for defining {\em points}, {\em rectangles} and {\em domains}.
 A {\em point} is an n-tuple of integers.  The {\tt Point} constructor, which is templated on the
 dimension $n$,  is used to create points:
 \begin{verbatim}
-Point<1> one(1);                     // The 1 dimensional point <1>
-Point<1> two(2);                     // The 1 dimensional point <2>
-Point<1> anotherone = make_point(1); // The 1 dimensional point <1>
-Point<2> zeroes = make_point(0,0);   // The 2 dimensional point <0,0>
-Point<2> twos = make_point(2,2);     // The 2 dimensional point <2,2>
-Point<2> threes = make_point(3,3);   // The 2 dimensional point <3,3>
-Point<3> fours = make_point(4,4,4);  // The 3 dimensional point <4,4,4>
+Point<1> one(1);        // The 1 dimensional point <1>
+Point<1> two(2);        // The 1 dimensional point <2>
+Point<2> zeroes(0,0);   // The 2 dimensional point <0,0>
+Point<2> twos(2,2);     // The 2 dimensional point <2,2>
+Point<2> threes(3,3);   // The 2 dimensional point <3,3>
+Point<3> fours(4,4,4);  // The 3 dimensional point <4,4,4>
 \end{verbatim}
 
 There are many operations defined on points.  For example, points can be summed:
@@ -369,15 +368,11 @@ and one can take the dot product of two points:
 \begin{verbatim}
 twos.dot(threes)  // the integer 12
 \end{verbatim}
-All of the usual boolean operations are defined on points.  The following are all true:
+The following are true:
 \begin{verbatim}
 twos == twos   
 twos != threes 
-twos <= threes 
 \end{verbatim}
-For \verb+<=+, the ordering is lexicographic: a point $a$ is less than or equal to a point $b$ if they either agree
-in all coordinates, or the first coordinate in which they disagree reading from the left is smaller in $a$ than in $b$.
-
 A pair of points $a$ and $b$ defines a {\em rectangle} that includes all the points that are greater than or equal to $a$
 and less than or equal to $b$.  For example:
 \begin{verbatim}
@@ -396,16 +391,12 @@ There are also many operations defined on rectangles.  A few examples, all of wh
 big != small                       
 big.contains(small)                
 small.overlaps(big)                
-small.convex_hull(big) == big      
 small.intersection(big) == small   
 \end{verbatim}
-Note that the intersection of two rectangles is always a rectangle.  The union of two or more rectangles is not necessarily a 
-rectangle, however. The {\em convex hull} of a set of rectangles $S$ is the smallest rectangle that contains all of the rectangles
-in $S$.
-
+Note that the intersection of two rectangles is always a rectangle.
 A {\em domain} is alternative type for rectangles.  A {\tt Rect} can be converted to a {\tt Domain}:
 \begin{verbatim}
-Domain bigdomain = Domain::from_rect<2>(big);
+Domain bigdomain = big;
 \end{verbatim}
 The difference between the two types is that {\tt Rect}s are templated on the dimension of the rectangle, while {\tt Domains}
 are not.  Legion runtime methods generally take {\tt Domain} arguments and use {\tt Domain}s internally, but for application
@@ -419,7 +410,7 @@ Again, the difference between the two types is that the {\tt Point} class is tem
 while {\tt DomainPoint} is not.  For Legion methods that require a {\tt DomainPoint}, there is a function to convert a
 {\tt Point}:
 \begin{verbatim}
-DomainPoint dtwos = DomainPoint::from_point<2>(twos);
+DomainPoint dtwos = twos;
 \end{verbatim}
 As before, most Legion runtime calls take {\tt DomainPoints}, but programmers should probably prefer using the {\tt Point} type
 for the extra type checking provided.
