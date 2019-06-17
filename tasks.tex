@@ -434,58 +434,52 @@ single operation.  The main reason for using such {\em index launches}
 is efficiency, as the overhead of starting $n$ tasks with a single
 call is much less than launching $n$ separate tasks, and the
 difference in performance only grows with $n$.  Thus, when launching
-even tens of tasks index launches should be used, provided of course
-that the structure of the task launch is sufficiently regular that an
-index launch is natural.
+even tens of tasks, as index launch should be used if possible.  Not
+all sets of tasks can be initiated using an index launch; 
+index launches are for executing multiple instances of the same task
+where all of the task instances can run in parallel.
 
 \begin{figure}
 {\small
 \begin{lstlisting}
 void top_level_task(const Task *task,
-                    const std::vector<PhysicalRegion> &regions,
-                    Context ctx,
-                    Runtime *runtime)
+		    const std::vector<PhysicalRegion> &regions,
+		    Context ctx, 
+		    Runtime *runtime)
 {
+  // Launch 50 tasks.
   int points = 50;
-  Rect<1> launch_bounds(Point<1>(1),Point<1>(points));
-  Domain launch_domain = Domain::from_rect<1>(launch_bounds);
+  const Rect<1> launch_domain(1,points);
   ArgumentMap producer_arg_map;
   for (int i = 0; i < points; i += 1)
   {
     int subtask_id = 2*i;
-    producer_arg_map.set_point(DomainPoint::from_point<1>(Point<1>(i)),
-                               TaskArgument(&subtask_id,sizeof(int)));
+    producer_arg_map.set_point(DomainPoint::from_point<1>(i+1), TaskArgument(&subtask_id,sizeof(int)));
   }
-  IndexLauncher producer_launcher(INDEX_PRODUCER_ID,
-                                  launch_domain,
-                                  TaskArgument(NULL, 0),
-                                  producer_arg_map);
+  ProducerTasks  producer_launcher(launch_domain, producer_arg_map);
   FutureMap fm = runtime->execute_index_space(ctx, producer_launcher);
-  ArgumentMap consumer_arg_map = fm->convert_to_argument_map();
-  IndexLauncher consumer_launcher(INDEX_CONSUMER_ID,
-                                  launch_domain,
-                                  TaskArgument(NULL, 0),
-                                  consumer_arg_map);
+  ArgumentMap consumer_arg_map(fm);
+  ConsumerTasks consumer_launcher(launch_domain, consumer_arg_map);
   runtime->execute_index_space(ctx, consumer_launcher);
 }
 
 int subtask_producer(const Task *task,
-                     const std::vector<PhysicalRegion> &regions,
-                     Context ctx,
-                     Runtime *runtime)
+		     const std::vector<PhysicalRegion> &regions,
+		     Context ctx,
+		     Runtime *runtime)
 {
   int subtask_number = *((const int *)task->local_args);
-  printf(``\tProducer subtask %d\n'', subtask_number);
+  printf("\tProducer subtask %d\n", subtask_number);
   return subtask_number + 1;
 }
 
 void subtask_consumer(const Task *task,
-                      const std::vector<PhysicalRegion> &regions,
-                      Context ctx,
-                      Runtime *runtime)
+		      const std::vector<PhysicalRegion> &regions,
+		      Context ctx,
+		      Runtime *runtime)
 {
-  int subtask_number = *((const int *)task->local_args);
-  printf(``\tConsumer subtask %d\n'', subtask_number);
+  int subtask_number = *((const int*)task->local_args);
+  printf("\tConsumer subtask %d\n", subtask_number);
 }
 \end{lstlisting}
 }
@@ -494,21 +488,19 @@ void subtask_consumer(const Task *task,
 \end{figure}
 
 
-Figure~\ref{fig:indexlaunch} gives an example that uses index
-launches. This program is an extension of the example in
-Figure~\ref{fig:futures}, but this time instead of launching a single
+Figure~\ref{fig:indexlaunch} implements the same computation as the example in
+Figure~\ref{fig:futures}, but instead of launching a single
 producer and consumer pair at a time, in Figure~\ref{fig:indexlaunch}
 all of the producers are launched in a single Legion runtime call,
 followed by another single call to launch all of the consumers.
 
 We now work through this example in detail, as it introduces several
-new Legion runtime calls.  First a one dimensional {\tt Rect} called
-{\tt launch\_bounds} is created with the points {\tt 1..points}, where
+new Legion runtime calls.  First a one dimensional {\tt Rect} 
+{\tt launch\_domain} is created with the points {\tt 1..points}, where
 {\tt points} is set to 50. The {\tt Rect} is then converted to a {\tt
   Domain} in preparation for passing it to a Legion call; one task will
 be launched for each point in the {\tt Domain}.  Currently, only
-{\tt Rects} can be used to define the index space of a task launch---i.e.,
-the index space must be a dense 1, 2 or 3 dimensional space.
+{\tt Rects} can be used to define the index space of an index task launch.
 
 When launching mutliple tasks simultaneously, we need some way to
 describe for each task what argument it should receive.  There are two
@@ -523,40 +515,25 @@ to $2p$.  Note that an {\tt ArgumentMap} does not need to name an argument
 for every point in the index space.
 
 The procedure for launching a set of tasks is analogous to launching a
-single task.  First an {\tt IndexLauncher} is created, which takes
-four arguments: the ID of the task to be launched, the index domain
-(which determines the number and identity of the tasks launched), a
-{\tt TaskArgument} which is passed to all of the tasks, and an {\tt
-  ArgumentMap} that gives a mapping from task ID's to the per task
-arguments.  Once the {\tt IndexLauncher} is created it can be executed
-with a call to {\tt runtime->execute\_index\_space}, which 
-takes the parent task's context and the {\tt IndexLauncher} as arguments.
+single task.  Following standard Legion practice, we first create a
+class derived from {\tt IndexLauncher} for each kind of task we will use in an
+index launch. These classes, {\tt ProducerTasks} and {\tt ConsumerTasks} in this
+example, encapsulate all of the information about the index task launch that is the
+same across all calls (e.g., the task id to be launched).  The {\tt ProducerTasks}
+index launcher takes the launch domain and an argument map.
+Executing the {\tt runtime->execute\_index\_space} method invokes all of the tasks
+in the launch domain. 
 
-Note that {\tt execute\_task\_space} for the producer tasks returns not
-a single {\tt Future}, but a {\tt FutureMap}, which is analagous to
-the {\tt ArgumentMap} in that it maps each point in the index
+The {\tt execute\_task\_space} for the producer tasks returns not
+a single {\tt Future}, but a {\tt FutureMap}, which maps each point in the index
 space to a {\tt Future}.  Figure~\ref{fig:indexlaunch} shows one way to
-use the {\tt FutureMap} by converting it to an {\tt ArgumentMap} that is fed into
-the index launch for the consumer tasks.  Note that the {\tt convert\_to\_argument\_map} call
-does not block on the {\tt Future} values, but simply notifies Legion of the dependency
-of each point in the index space on a specific {\tt Future}, which is used in the
-consumer index launch to provide the same execution semantics as the single task
-launches in Figure~\ref{fig:futures}: each consumer subtask runs only after its {\tt FutureMap}
-argument is available.
+use the {\tt FutureMap} by converting it to an {\tt ArgumentMap} that is passed to
+the index launch for the consumer tasks.  Note that the launch of the consumer subtasks
+does not block waiting for all of the futures to be resolved; instead, each consumer subtask
+runs only afer the future it depends on is resolved.
 
 The subtask definitions are straightforward.  Note that the argument specific to the subtask is
-in the field {\tt task->local\_args}.  Also note that in the consumer task that 
+in the field {\tt task->local\_args}.  Also note that when the consumer task actually runs 
 the argument is not a future, but a fully evaluated {\tt int}.
-
-Finally, while we do not show the code in Figure~\ref{fig:indexlaunch}, the boolean
-flags passed in registering the tasks with the Legion runtime are not the same as in
-previous examples.  For instance, the registration call
-\begin{verbatim}
- Runtime::register_legion_task<subtask_producer>(
-   INDEX_PRODUCER_ID, Processor::LOC_PROC, 
-   false/* no single launch*/, true/* multiple launch*/);
-\end{verbatim}
-says that the task {\tt subtask\_producer} with ID {\tt INDEX\_PRODUCER\_ID} is ineligible for
-single task launches and must only be used for index task launches.
 
 

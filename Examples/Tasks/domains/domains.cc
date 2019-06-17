@@ -32,16 +32,9 @@ void print_point(DomainPoint d) {
     printf("%lld>\n",d[d.dim-1]);
 }
 
-void print_point1(Point<1> p) {
-  print_point(DomainPoint::from_point<1>(p));
-}
-
-void print_point2(Point<2> p) {
-  print_point(DomainPoint::from_point<2>(p));
-}
-
-void print_point3(Point<3> p) {
-  print_point(DomainPoint::from_point<3>(p));
+template<int I>
+void print_point(Point<I> p) {
+  print_point(DomainPoint::from_point<I>(p));
 }
 
 void top_level_task(const Task *task,
@@ -52,18 +45,18 @@ void top_level_task(const Task *task,
   // Point operations
   //
   Point<1> one(1);
-  print_point1(one);
+  print_point<1>(one);
 
   Point<1> two(2);
-  print_point1(two);
+  print_point<1>(two);
 
-  print_point1(one + two);
+  print_point<1>(one + two);
 
   coord_t source[3];
   source[0] = 0;
   source[1] = 0;
   Point<2> zero(source);
-  print_point2(zero);
+  print_point<2>(zero);
 
   Point<1> anotherone = make_point(1);
   Point<2> zeroes = make_point(0,0);
@@ -75,8 +68,8 @@ void top_level_task(const Task *task,
   printf("The point is <%lld,%lld>\n",twos[0],twos[1]);
   printf("The point is <%lld,%lld>\n",threes[0],threes[1]);
   printf("The point is <%lld,%lld,%lld>\n",fours[0],fours[1],fours[2]);
-  print_point2(twos + threes);
-  print_point2(twos * threes);
+  print_point<2>(twos + threes);
+  print_point<2>(twos * threes);
   printf("The dot product is %lld\n",twos.dot(threes));
   
   assert(twos == twos);

@@ -2,7 +2,6 @@
 #include "legion.h"
 
 using namespace Legion;
-//using namespace LegionRuntime::Arrays;
 
 // All tasks must have a unique task id (a small integer).
 // A global enum is a convenient way to assign task ids.
@@ -20,19 +19,15 @@ enum TaskID {
 class ProducerTasks: public IndexLauncher {
 public:
   ProducerTasks(const Domain &launch_domain, const ArgumentMap &arg_map);
-public:
-  static const int TASK_ID = PRODUCER_ID;  // The id of the tasks that will be launched.
-  static const int MAPPER_ID = 0;
 };
 
 ProducerTasks::ProducerTasks(const Domain &launch_domain,const ArgumentMap &arg_map) : 
   IndexLauncher(PRODUCER_ID,          // the ID of the tasks this index launcher will execute
 		launch_domain,        // identities of the tasks to launch (an index space)
                 TaskArgument(NULL,0), // arguments passed to all the tasks, not used in this example
-                arg_map,              // a map from the launch domain to the argument for each individual task
-                Predicate::TRUE_PRED, // these tasks can be indexed launched
-                false,                // these tasks cannot be single launched
-                0)                    // an id for the mapper --- not used in this example
+                arg_map               // a map from the launch domain to an individual argument for each task
+		)
+  // IndexLauncher has additional, less commonly used, arguments that are not needed for this example.
 {
 
 }
@@ -41,13 +36,10 @@ class ConsumerTasks: public IndexLauncher {
 public:
   ConsumerTasks(const Domain &launch_domain,
 	       const ArgumentMap &arg_map);
-public:
-  static const int TASK_ID = CONSUMER_ID;
-  static const int MAPPER_ID = 0;
 };
 
 ConsumerTasks::ConsumerTasks(const Domain &launch_domain,const ArgumentMap &arg_map) : 
-   IndexLauncher(CONSUMER_ID, launch_domain, TaskArgument(NULL,0), arg_map, Predicate::TRUE_PRED, false, 0)
+  IndexLauncher(CONSUMER_ID, launch_domain, TaskArgument(NULL,0), arg_map)
 {
 
 }
@@ -56,7 +48,6 @@ void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &regions,
 		    Context ctx, 
 		    Runtime *runtime)
-
 {
   // Launch 50 tasks.
   int points = 50;
