@@ -2,7 +2,6 @@
 #include "legion.h"
 
 using namespace Legion;
-using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
@@ -17,9 +16,9 @@ void top_level_task(const Task *task,
 		    Context ctx, 
 		    Runtime *runtime)
 {
-  // create a structured index space
+  // create an index space
   Rect<1> rec(Point<1>(0),Point<1>(99));
-  IndexSpace sis = runtime->create_index_space(ctx,Domain::from_rect<1>(rec));
+  IndexSpace is = runtime->create_index_space(ctx,rec);
 
   // create a field space
   FieldSpace fs = runtime->create_field_space(ctx);
@@ -28,15 +27,15 @@ void top_level_task(const Task *task,
   assert(fida == FIELD_A);
 
   // create two distinct logical regions
-  LogicalRegion lr1 = runtime->create_logical_region(ctx,sis,fs);
-  LogicalRegion lr2 = runtime->create_logical_region(ctx,sis,fs);
+  LogicalRegion lr1 = runtime->create_logical_region(ctx,is,fs);
+  LogicalRegion lr2 = runtime->create_logical_region(ctx,is,fs);
 
   // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
   // when they go out of scope.
   runtime->destroy_logical_region(ctx,lr1);
   runtime->destroy_logical_region(ctx,lr2);
   runtime->destroy_field_space(ctx,fs);
-  runtime->destroy_index_space(ctx,sis);
+  runtime->destroy_index_space(ctx,is);
 
 }
 

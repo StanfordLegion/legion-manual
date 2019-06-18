@@ -3,7 +3,6 @@
 
 using namespace Legion;
 using namespace LegionRuntime::Accessor;
-using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
@@ -15,67 +14,45 @@ enum FieldIDs {
 };
 
 void top_level_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
+		    const std::vector<PhysicalRegion> &rgns,
 		    Context ctx, 
-		    Runtime *runtime)
+		    Runtime *rt)
 {
   Rect<1> rec(Point<1>(0),Point<1>(99));
-  IndexSpace sis = runtime->create_index_space(ctx,Domain::from_rect<1>(rec));
-  FieldSpace fs = runtime->create_field_space(ctx);
-  FieldAllocator field_allocator = runtime->create_field_allocator(ctx,fs);
+  IndexSpace is = rt->create_index_space(ctx,rec);
+  FieldSpace fs = rt->create_field_space(ctx);
+  FieldAllocator field_allocator = rt->create_field_allocator(ctx,fs);
   FieldID fida = field_allocator.allocate_field(sizeof(int), FIELD_A);
   assert(fida == FIELD_A);
 
 
-  LogicalRegion lr = runtime->create_logical_region(ctx,sis,fs);
+  LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
 
   int init = 1;
-  runtime->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
+  rt->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
 
   TaskLauncher sum_launcher(SUM_TASK_ID, TaskArgument(NULL,0));
   sum_launcher.add_region_requirement(RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
   sum_launcher.add_field(0, FIELD_A);
-  runtime->execute_task(ctx, sum_launcher);
+  rt->execute_task(ctx, sum_launcher);
 
   // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
   // when they go out of scope.
-  runtime->destroy_logical_region(ctx,lr);
-  runtime->destroy_field_space(ctx,fs);
-  runtime->destroy_index_space(ctx,sis);
-}
-
-void init_task(const Task *task,
-                     const std::vector<PhysicalRegion> &regions,
-                     Context ctx, Runtime *runtime)
-{
-  FieldID fid = FIELD_A;
-  RegionAccessor<AccessorType::Generic, int> acc =
-    regions[0].get_field_accessor(fid).typeify<int>();
-
-  Domain dom = runtime->get_index_space_domain(ctx,
-					       task->regions[0].region.get_index_space());
-  Rect<1> rect = dom.get_rect<1>();
-  for (GenericPointInRectIterator<1> pir(rect); pir; pir++)
-    {
-      acc.write(DomainPoint::from_point<1>(pir.p), 1);
-    }
+  rt->destroy_logical_region(ctx,lr);
+  rt->destroy_field_space(ctx,fs);
+  rt->destroy_index_space(ctx,is);
 }
 
 void sum_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, Runtime *runtime)
+		    const std::vector<PhysicalRegion> &rgns,
+		    Context ctx, Runtime *rt)
 {
-  FieldID fid = FIELD_A;
-  RegionAccessor<AccessorType::Generic, int> acc =
-    regions[0].get_field_accessor(fid).typeify<int>();
-
-  Domain dom = runtime->get_index_space_domain(ctx,
-					       task->regions[0].region.get_index_space());
-  Rect<1> rect = dom.get_rect<1>();
+  const FieldAccessor<READ_ONLY,int,1> fa_a(rgns[0], FIELD_A);
+  Rect<1> d = rt->get_index_space_domain(ctx,task->regions[0].region.get_index_space());
   int sum = 0;
-  for (GenericPointInRectIterator<1> pir(rect); pir; pir++)
+  for (PointInRectIterator<1> itr(d); itr(); itr++)
     {
-      sum += acc.read(DomainPoint::from_point<1>(pir.p));
+      sum += fa_a[*itr]; 
     }
   printf("The sum of the elements of the region is %d\n",sum);
 }

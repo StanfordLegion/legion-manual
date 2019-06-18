@@ -3,7 +3,6 @@
 
 using namespace Legion;
 using namespace LegionRuntime::Accessor;
-using namespace LegionRuntime::Arrays;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
