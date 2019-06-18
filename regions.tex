@@ -60,24 +60,24 @@ region.
 \begin{lstlisting}
   // create an index space
   Rect<1> rec(Point<1>(0),Point<1>(99));
-  IndexSpace is = rt->create_index_space(ctx,rec);
+  IndexSpace is = runtime->create_index_space(ctx,rec);
 
-  // create a field space  
-  FieldSpace fs = rt->create_field_space(ctx);
-  FieldAllocator field_allocator = rt->create_field_allocator(ctx,fs);
+  // create a field space                          
+  FieldSpace fs = runtime->create_field_space(ctx);
+  FieldAllocator field_allocator = runtime->create_field_allocator(ctx,fs);
   FieldID fida = field_allocator.allocate_field(sizeof(float), FIELD_A);
   assert(fida == FIELD_A);
 
-  // create two distinct logical regions   
-  LogicalRegion lr1 = rt->create_logical_region(ctx,is,fs);
-  LogicalRegion lr2 = rt->create_logical_region(ctx,is,fs);
+  // create two distinct logical regions 
+  LogicalRegion lr1 = runtime->create_logical_region(ctx,is,fs);
+  LogicalRegion lr2 = runtime->create_logical_region(ctx,is,fs);
 
-  // Clean up.  IndexAllocators and FieldAllocators automatically
-  // have their resources reclaimed when they go out of scope.
-  rt->destroy_logical_region(ctx,lr1);
-  rt->destroy_logical_region(ctx,lr2);
-  rt->destroy_field_space(ctx,fs);
-  rt->destroy_index_space(ctx,is);
+  // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
+  // when they go out of scope. 
+  runtime->destroy_logical_region(ctx,lr1);
+  runtime->destroy_logical_region(ctx,lr2);
+  runtime->destroy_field_space(ctx,fs);
+  runtime->destroy_index_space(ctx,is);
 \end{lstlisting}
 }
 \caption{\legionbook{Regions/logicalregions/logicalregions.cc}}
@@ -102,19 +102,17 @@ Section~\ref{sec:coherence}.
 {\small
 \begin{lstlisting}
   TaskLauncher init_launcher(INIT_TASK_ID, TaskArgument(NULL,0));
-  init_launcher.add_region_requirement(
-                  RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr));
+  init_launcher.add_region_requirement(RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr));
   init_launcher.add_field(0, FIELD_A);
   rt->execute_task(ctx, init_launcher);
 
   TaskLauncher sum_launcher(SUM_TASK_ID, TaskArgument(NULL,0));
-  sum_launcher.add_region_requirement(
-                 RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
+  sum_launcher.add_region_requirement(RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
   sum_launcher.add_field(0, FIELD_A);
   rt->execute_task(ctx, sum_launcher);
 \end{lstlisting}
 }
-\caption{Task launches from \legionbook{Regions/physicalregions/}}
+\caption{Task launches from \legionbook{Regions/physicalregions/physicalregions.cc.}}
 \label{fig:permissions}
 \end{figure}
 
@@ -159,7 +157,7 @@ method {\tt add\_region\_requirement}.  A {\tt RegionRequirement} has four compo
 region simultaneously.  The mode {\tt EXCLUSIVE} means that this subtask must appear to have exclusive access to the region---if
 any other tasks do access the region, any changes they make cannot be visible to this subtask. Furthermore, the subtask
 must see all updates from previously launched tasks. Other coherence modes that we will discuss are {\tt ATOMIC} and
-{\tt SIMULTANEOUS}.
+{\tt SIMULTANEOUS} (see Chapter~\ref{chap:coherence}).
 
 \item Finally, the region requirement names its {\em parent region}.
   We have not yet discussed subregions (see
@@ -179,31 +177,22 @@ accessed by the subtask.
 \begin{figure}
 {\small
 \begin{lstlisting}
-using namespace LegionRuntime::Accessor;
-
-...
-
 void sum_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, Runtime *runtime)
+		    const std::vector<PhysicalRegion> &rgns,
+		    Context ctx, Runtime *rt)
 {
-  FieldID fid = FIELD_A;
-  RegionAccessor<AccessorType::Generic, int> acc =
-    regions[0].get_field_accessor(fid).typeify<int>();
-
-  Domain dom = rt->get_index_space_domain(ctx,
-                   task->regions[0].region.get_index_space());
-  Rect<1> rect = dom.get_rect<1>();
+  const FieldAccessor<READ_ONLY,int,1> fa_a(rgns[0], FIELD_A);
+  Rect<1> d = rt->get_index_space_domain(ctx,task->regions[0].region.get_index_space());
   int sum = 0;
-  for (GenericPointInRectIterator<1> pir(rect); pir; pir++)
+  for (PointInRectIterator<1> itr(d); itr(); itr++)
     {
-      sum += acc.read(DomainPoint::from_point<1>(pir.p));
+      sum += fa_a[*itr]; 
     }
   printf("The sum of the elements of the region is %d\n",sum);
 }
 \end{lstlisting}
 }
-\caption{Region accessors from \legionbook{Regions/physicalregions/}}
+\caption{Region accessors from \legionbook{Regions/physicalregions/physicalregions.cc}.}
 \label{fig:accessors}
 \end{figure}
 We now turn our attention to the two subtasks.  The initialization task and the sum task have very similar
@@ -251,7 +240,7 @@ int init = 1;
 rt->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
 \end{lstlisting}
 }
-\caption{\legionbook{Regions/fillfields/}}
+\caption{\legionbook{Regions/fillfields/fillfields.cc}}
 \label{fig:fill}
 \end{figure}
 The code in Figure~\ref{fig:fill} uses the Legion runtime method {\tt fill\_field} to initialize every 
@@ -280,9 +269,6 @@ The advantage of using {\tt fill\_field} is that the Legion runtime performs the
 the field is used, which makes the operation less expensive than a normal task call.  Thus, {\tt fill\_field} is preferred
 whenever all instances of a field are initialized to the same value.
 
-
-\section{Coherence}
-\label{sec:coherence}
 
 \section{Inline Launchers}
 \label{sec:inlinelaunch}
