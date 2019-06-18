@@ -1,10 +1,9 @@
 \chapter{Regions}
 \label{chap:regions}
 
-Regions are the primary abstraction for managing data in Legion.  While the
-examples in Chapter~\ref{chap:tasks} emphasized the use of futures, this was for
-simplicity.  As mentioned previously, futures are for passing small amounts of data
-between tasks; regions are for holding and processing bulk data.
+Regions are the primary abstraction for managing data in Legion.  Futures,
+which the examples in Chapter~\ref{chap:tasks} emphasize, are for passing small amounts of data
+between tasks. Regions are for holding and processing bulk data.
 
 Because data placement and movement are crucial to performance in modern machines,
 Legion provides extensive facilities for managing regions.  These features are a
@@ -61,24 +60,24 @@ region.
 \begin{lstlisting}
   // create an index space
   Rect<1> rec(Point<1>(0),Point<1>(99));
-  IndexSpace is = runtime->create_index_space(ctx,rec);
+  IndexSpace is = rt->create_index_space(ctx,rec);
 
   // create a field space  
-  FieldSpace fs = runtime->create_field_space(ctx);
-  FieldAllocator field_allocator = runtime->create_field_allocator(ctx,fs);
+  FieldSpace fs = rt->create_field_space(ctx);
+  FieldAllocator field_allocator = rt->create_field_allocator(ctx,fs);
   FieldID fida = field_allocator.allocate_field(sizeof(float), FIELD_A);
   assert(fida == FIELD_A);
 
   // create two distinct logical regions   
-  LogicalRegion lr1 = runtime->create_logical_region(ctx,is,fs);
-  LogicalRegion lr2 = runtime->create_logical_region(ctx,is,fs);
+  LogicalRegion lr1 = rt->create_logical_region(ctx,is,fs);
+  LogicalRegion lr2 = rt->create_logical_region(ctx,is,fs);
 
   // Clean up.  IndexAllocators and FieldAllocators automatically
   // have their resources reclaimed when they go out of scope.
-  runtime->destroy_logical_region(ctx,lr1);
-  runtime->destroy_logical_region(ctx,lr2);
-  runtime->destroy_field_space(ctx,fs);
-  runtime->destroy_index_space(ctx,is);
+  rt->destroy_logical_region(ctx,lr1);
+  rt->destroy_logical_region(ctx,lr2);
+  rt->destroy_field_space(ctx,fs);
+  rt->destroy_index_space(ctx,is);
 \end{lstlisting}
 }
 \caption{\legionbook{Regions/logicalregions/logicalregions.cc}}
@@ -106,13 +105,13 @@ Section~\ref{sec:coherence}.
   init_launcher.add_region_requirement(
                   RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr));
   init_launcher.add_field(0, FIELD_A);
-  runtime->execute_task(ctx, init_launcher);
+  rt->execute_task(ctx, init_launcher);
 
   TaskLauncher sum_launcher(SUM_TASK_ID, TaskArgument(NULL,0));
   sum_launcher.add_region_requirement(
                  RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
   sum_launcher.add_field(0, FIELD_A);
-  runtime->execute_task(ctx, sum_launcher);
+  rt->execute_task(ctx, sum_launcher);
 \end{lstlisting}
 }
 \caption{Task launches from \legionbook{Regions/physicalregions/}}
@@ -120,10 +119,10 @@ Section~\ref{sec:coherence}.
 \end{figure}
 
 
-Figure~\ref{fig:permissions} shows an excerpt from the top level task in 
+Figure~\ref{fig:permissions} shows an excerpt from the top level task in \\
 \legionbook{Regions/physicalregions/physicalregions.cc}.  This program is an extension of the
 program in Figure~\ref{fig:lr1}---the creation of the (single) logical region is exactly the same as in the 
-previous example.  Here we call two tasks that both operation on the logical region {\tt lr}. The first
+previous example.  Here we call two tasks that operate on the logical region {\tt lr}. The first
 task intializes the elements of the region and the second sums the elements and prints out the results.
 As in previous examples, a {\tt TaskLauncher} object describes the task to be called and its non-region arguments,
 of which there are none.  When tasks also have region arguments, additional information must be added
@@ -140,7 +139,7 @@ method {\tt add\_region\_requirement}.  A {\tt RegionRequirement} has four compo
   different permissions: the initialization task accesses the region
   with permission {\tt WRITE\_DISCARD} (which means it will overwrite
   everything that was previously in the region) and the sum task
-  accesses the region with permission {\tt READ}.  Permissions are
+  accesses the region with permission {\tt READ\_ONLY}.  Permissions are
   used by the Legion runtime to determine which tasks can run in
   parallel.  For example, if two tasks only read from a region, they
   can execute simultaneously.  Other interesting permissions that we
@@ -192,7 +191,7 @@ void sum_task(const Task *task,
   RegionAccessor<AccessorType::Generic, int> acc =
     regions[0].get_field_accessor(fid).typeify<int>();
 
-  Domain dom = runtime->get_index_space_domain(ctx,
+  Domain dom = rt->get_index_space_domain(ctx,
                    task->regions[0].region.get_index_space());
   Rect<1> rect = dom.get_rect<1>();
   int sum = 0;
@@ -218,25 +217,22 @@ that modify the {\tt FIELD\_A} of the region (which in this case is
 just the initialization task {\tt init\_task}).  The only new feature
 that we need to discuss, then, is how the task accesses the data in {\tt FIELD\_A}.
 
-Access to the fields of a region is done through a {\tt RegionAccessor}.  Accessors in Legion provide a level of indirection
+Access to the fields of a region is done through a {\tt FieldAccessor}.  Accessors in Legion provide a level of indirection
 that shields application code from the details of how physical instances  are represented in memory.  Under the hood, 
 the Legion runtime chooses among many different representations depending on the circumstances, so this extra level
 of abstraction avoids having those details exposed and fixed in application code.  There are several different types of
-region accessors provided by Legion.  The {\tt Generic} accessor type used in Figure~\ref{fig:accessors} has the virtue of having
-extensive debugging built in, but it is also very slow and should never be used in production code.  We discuss higher
-performane accessors in Section~\ref{sec:accessors}.
+region accessors provided by Legion.  The {\tt Generic} accessor has 
+extensive debugging but  it is also very slow and should never be used in production code.  
+The {\tt FieldAccessor} used in Figure~\ref{fig:accessors} does no checking and is much more performant.
+
 In Figure~\ref{fig:accessors}, the field
 {\tt FIELD\_A} is named in the creation of a {\tt RegionAccessor} for the first (and only) physical region argument.
 Note that the type of the field is also included as part of the construction of the accessor.
-
-The only other thing that is required to access the region is knowledge of the region's index space.  Figure~\ref{fig:accessors}
+The other requirement to access the region is knowledge of the region's index space.  Figure~\ref{fig:accessors}
 illustrates how to recover a region's index space from a physical instance of the region using the {\tt get\_index\_space} method.
-Since this region has a structured index space, we convert the domain to a rectangle (using the {\tt get\_rect} method).
+Since this region has a dense index space, we convert the domain to a rectangle (using the {\tt get\_rect} method).
 All that is left, then, is to iterate over all the points of the index space (the rectangle {\tt rect}) and read the
 field {\tt FIELD\_A} for each such point in the region using the field accessor {\tt acc}.
-
-As a final comment, note that the accessor methods are in the namespace {\tt LegionRuntime::Accessor} (see the first line
-of Figure~\ref{fig:accessors}).
 
 \section{Fill Fields}
 \label{sec:fill}
@@ -249,10 +245,10 @@ the runtime that fills every occurrence of {\tt FIELD\_A} with a default value.
 \begin{figure}
 {\small
 \begin{lstlisting}
-LogicalRegion lr = runtime->create_logical_region(ctx,sis,fs);
+LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
 
 int init = 1;
-runtime->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
+rt->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
 \end{lstlisting}
 }
 \caption{\legionbook{Regions/fillfields/}}
@@ -291,5 +287,3 @@ whenever all instances of a field are initialized to the same value.
 \section{Inline Launchers}
 \label{sec:inlinelaunch}
 
-\section{Accessors}
-\label{sec:accessors}

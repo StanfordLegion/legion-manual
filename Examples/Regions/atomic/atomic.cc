@@ -79,8 +79,7 @@ void top_level_task(const Task *task,
 
 
   //
-  // Sum up the answers.  Since we are just adding numbers up in different orders, the result
-  // should always be the same.
+  // Sum up the elements of the region.
   //
   TaskLauncher sum_launcher(SUM_TASK_ID, TaskArgument(NULL,0));
   sum_launcher.add_region_requirement(RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
