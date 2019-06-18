@@ -2,7 +2,6 @@
 #include "legion.h"
 
 using namespace Legion;
-using namespace LegionRuntime::Accessor;
 
 enum TaskIDs {
   TOP_LEVEL_TASK_ID,
