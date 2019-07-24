@@ -273,3 +273,60 @@ whenever all instances of a field are initialized to the same value.
 \section{Inline Launchers}
 \label{sec:inlinelaunch}
 
+The most common way to gain access to a region $r$ is by launching a
+task $t$ with a region requirement on $r$, in which case the Legion
+runtime will automatically map a physical instance of $r$ that will be
+accessible in $t$.  There are situations where a task may need to map
+a physical instance of a region explicitly, such as when a task needs
+to access a newly created region or a new region is returned from a
+child task.  Figure~\ref{fig:inlinelaunch} shows the use of an {\em
+  inline mapping} to explicitly map a physical region.  After creating
+a new logical region an {\tt InlineLauncher} object (so named because
+it has similar functionality to a {\tt TaskLauncher} object) is
+created with a region requirement and any associated fields.  The
+runtime methods $\tt map\_region$ and $\tt unmap\_region$ assign and
+unassign a physical instance to {\tt pr}.  Note that $\tt map\_region$
+is an asynchronous call and it is necessary to wait for the physical
+instance to become valid before it can be used.
+
+\begin{figure}
+{\small
+\begin{lstlisting}
+  LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
+  InlineLauncher launcher(RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr).add_field(0,FIELD_A));
+  PhysicalRegion pr = rt->map_region(ctx, launcher);
+  pr.wait_until_valid();
+
+  ... computation omitted, see Examples/Regions/inlinemapping/inlinemapping.cc
+
+  // cleanup
+  rt->unmap_region(ctx, pr);
+\end{lstlisting}
+}
+\caption{\legionbook{Regions/inlinemapping/inlinemapping.cc}}
+\label{fig:inlinelaunch}
+\end{figure}
+
+A important invariant maintained by the Legion runtime system is that
+tasks have exclusive access to regions to which they have write access
+(we will see how to relax this requirement in
+Chapter~\ref{chapter:coherence}).  This invariant implies that when a
+parent task calls a child task, any regions passed to the child that
+may be written must be unmapped before the call and remapped after the
+call.  (To see that unmapping a region before passing it to a child
+task is necessary, keep in mind that task calls are asynchronous, and
+so the parent and child tasks may execute in parallel.  If a
+parent task does not unmap a region required by a child task with
+write privileges, the application will most likely deadlock.)  For
+regions passed as region requirements to task launches and where the
+programmer has not explicitly mapped (or unmapped) the region, the
+runtime system automatically wraps the task call in the necessary
+calls to $\tt unmap\_region$ and $\tt map\_region$.  In cases where
+the parent task does not touch the region across many child task
+calls, performance can be improved if the application explicitly
+unmaps the region at the earliest possible point and maps the region
+again at the latest possible point, thereby avoiding any
+mapping/unmapping of the region during intermediate task calls.
+Whenever a program explicitly maps or unmaps a region $r$ within a
+task, the Legion runtime will no longer silently wrap child task
+invocations with calls to unmap/map $r$.
