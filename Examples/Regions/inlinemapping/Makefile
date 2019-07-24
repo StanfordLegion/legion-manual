@@ -12,9 +12,9 @@ USE_GASNET	?= 0		# Include GASNet support (requires GASNet)
 USE_HDF 	?= 0		# Include HDF5 support (requires HDF5)
 
 # Put the binary file name here
-OUTFILE		?= explicit
+OUTFILE		?= inlinemapping
 # List all the application source files here
-GEN_SRC		?= explicit.cc			# .cc files
+GEN_SRC		?= inlinemapping.cc		# .cc files
 GEN_GPU_SRC	?=				# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile

@@ -33,4 +33,4 @@ spelling :
 	for f in *.tex; do aspell -p ./aspell.en.pws --repl=./aspell.en.prepl -c $$f; done
 
 clean:
-	rm -f *.bbl *.aux *.log *.blg *.lot *.lof *.toc *.dvi $(DOC).pdf
+	rm -f *.bbl *.aux *.log *.blg *.lot *.lof *.toc *.dvi $(DOC).pdf *~
