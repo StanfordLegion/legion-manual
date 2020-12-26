@@ -1,36 +1,19 @@
-DOC=legion
-SHELL=/bin/bash
+# Minimal makefile for Sphinx documentation
+#
 
-# dependencies via include files
-INCLUDED_TEX = installation.tex \
-	       tasks.tex \
-	       regions.tex \
-	       partitioning.tex \
-	       mapping.tex \
-	       interop.tex \
-	       reference.tex
-INCLUDED_FIGS =  
+# You can set these variables from the command line.
+SPHINXOPTS    =
+SPHINXBUILD   = sphinx-build
+SOURCEDIR     = source
+BUILDDIR      = build
 
-all: $(DOC).pdf 
+# Put it first so that "make" without argument is like "make help".
+help:
+	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-$(DOC).pdf: $(DOC).tex bibliography.bib $(INCLUDED_TEX) $(INCLUDED_FIGS)
+.PHONY: help Makefile
 
-
-%.pdf: %.tex bibliography.bib
-	pdflatex -halt-on-error $*.tex
-	(if grep -q bibliography $*.tex; \
-	then \
-		bibtex $*; \
-		pdflatex -halt-on-error $*.tex; \
-	fi)
-	pdflatex -halt-on-error $*.tex
-
-%.pdf: %.tex
-	pdflatex -halt-on-error $*.tex
-	pdflatex -halt-on-error $*.tex
-
-spelling :
-	for f in *.tex; do aspell -p ./aspell.en.pws --repl=./aspell.en.prepl -c $$f; done
-
-clean:
-	rm -f *.bbl *.aux *.log *.blg *.lot *.lof *.toc *.dvi $(DOC).pdf *~
+# Catch-all target: route all unknown targets to Sphinx using the new
+# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
+%: Makefile
+	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
