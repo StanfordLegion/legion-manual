@@ -59,14 +59,21 @@ same binary is running in each process.
 
 Preregistration calls fall into two categories: configuration of
 runtime options and registration of resource objects to be used by
-Legion programs. There are two optional runtime configuration calls
-that can be performed before start-up of the Legion runtime. First,
-is the static method to set the task ID of the top-level task to be 
-dispatched by the runtime upon the completion of start-up.
+Legion programs. 
+
+.. _subsec:preconfig:
+
+Runtime Configuration
+---------------------
+
+There are several optional runtime configuration calls that can be 
+performed before start-up of the Legion runtime. First, is the static 
+method to set the task ID of the top-level task to be dispatched by the 
+runtime upon the completion of start-up.
 
 .. code-block:: c++
 
-  static void Legion::Runtime::set_top_level_task_id(TaskID);
+  static void Runtime::set_top_level_task_id(TaskID task_id);
 
 This method can be called repeatedly, but the value set by the 
 last invocation will be the one task actually dispatched. Note that this
@@ -77,7 +84,7 @@ specify the ID of the mapper to use for mapping the top-level task.
 
 .. code-block:: c++
 
-  static void Legion::Runtime::set_top_level_task_mapper_id(MapperID);
+  static void Runtime::set_top_level_task_mapper_id(MapperID mapper_id);
 
 This method can also be called repeatedly and only the last value will
 be used. Again, this is more of a legacy function for programs that 
@@ -92,14 +99,15 @@ must be function pointers with the following type signature:
 
 .. code-block:: c++
 
-  typedef void (*RegistrationCallbackFnptr)(Legion::Machine, Legion::Runtime*, 
-                                            const std::vector<Legion::Processor>&);  
+  typedef void (*RegistrationCallbackFnptr)(Machine machine, 
+                                            Runtime* runtime, 
+                                            const std::vector<Processor>& procs);  
 
 Function pointers are registered with the Legion runtime using this method:
 
 .. code-block:: c++
   
-  static void Legion::Runtime::add_registration_callback(RegistrationCallbackFnptr);
+  static void Runtime::add_registration_callback(RegistrationCallbackFnptr fnptr);
 
 After the runtime has been fully initialized, but before any top-level
 tasks have run, then the runtime will proceed to invoke each of these
@@ -109,11 +117,17 @@ A common idiom for Legion libraries is to record a registration callback,
 and then perform all their registrations once the runtime has started and
 has more facilities to offer.
 
+.. _subsec:preresource:
+
+Resource Pre-Registration
+-------------------------
+
 The second class of preregistration functions are methods that are
 used for registering resources such as task variants, reduction 
-operations, etc. All of these resources can also be registered later after
-the runtime is started, but for applications that know these resources
-up-front, it can be useful to preregister these resources. 
+operations, etc. All of these resources can also be registered 
+:ref:`after the runtime is started <sec:registrationcallbacks>`, 
+but for applications that know these resources up-front, it can be 
+useful to preregister these resources. 
 
 
 .. _sec:startup:
@@ -125,9 +139,10 @@ The Legion runtime is started be invoking the ``start`` method:
 
 .. code-block:: c++
 
-  static int Legion::Runtime::start(int argc, char **argv, 
-                                    bool background = false, 
-                                    bool supply_default_mapper = true);
+  static int Runtime::start(int argc, 
+                            char **argv, 
+                            bool background = false, 
+                            bool supply_default_mapper = true);
 
 The start method should be invoked exactly once in each process. Multiple
 invocations will result in undefined behavior. Even after waiting for the
@@ -139,14 +154,15 @@ argument is a boolean indicating whether control should return immediately
 (if set to ``true``) or whether the runtime should put this thread to sleep until
 all Legion top-level tasks are finished executing. The fourth argument indicates
 whether Legion should supply an implementation of the :ref:`default mapper <sec:defaultmapper>`
-for ``MapperID`` zero. In the case of ``background`` being set to ``true``, the return 
-value of the function will be zero if the runtime succeeds in starting and non-zero 
+for ``MapperID`` zero (see the chapter on :ref:`mapping <chap:mapping>` for more
+information on ``MapperID``). In the case of ``background`` being set to ``true``, 
+the return value of the function will be zero if the runtime succeeds in starting and non-zero 
 otherwise. In the case of ``background`` being set to ``false``, the return value will
 represent the last invocation of the ``set_return_code`` function:
 
 .. code-block:: c++
 
-  static void Legion::Runtime::set_return_code(int return_code);
+  static void Runtime::set_return_code(int return_code);
 
 The ``set_return_code`` function is a static method that can be called by any task
 anywhere during the execution of the Legion runtime. Only the last invocation of
@@ -157,7 +173,7 @@ to the application to call the following method before exiting the process.
 
 .. code-block:: c++
 
-  static int Legion::Runtime::wait_for_shutdown(void);
+  static int Runtime::wait_for_shutdown(void);
 
 This method will block the calling thread, wait for all top-level tasks to finish
 executing, and wait for the Legion runtime to shut itself down. This call should be
@@ -179,8 +195,9 @@ Legion, also provides the ``initialize`` method:
 
 .. code-block:: c++
 
-  static void Legion::Runtime::initialize(int *argc, char ***argv, 
-                                          bool filter = false);
+  static void Runtime::initialize(int *argc, 
+                                  char ***argv, 
+                                  bool filter = false);
 
 The initialize method should be invoked exactly once per process. Multiple invocations
 per process will result in undefined behavior. The initialize method will perform the 
@@ -194,6 +211,37 @@ If ``filter`` is set to ``true``, then Legion will rewrite the command line argu
 to remove all :ref:`Legion command line arguments <sec:commandline>` from ``argv`` and
 reduce the number of arguments represented by ``argc`` accordingly.
 
+After the Legion runtime has been started, the following method for obtaining a pointer
+to the ``Runtime`` instance is universally available until the runtime is shutdown:
+
+.. code-block:: c++
+
+  static Runtime* Runtime::get_runtime(Processor proc = Processor::NO_PROC);
+
+Note that this is a static method and therefore can be invoked anywhere without any context 
+in order to get the ``Runtime`` instance and then use it to perform runtime calls. Nominally, 
+there is only one Legion runtime instance in each process, so the ``proc`` argument can 
+usually be ignored. However, there are some configurations 
+(see :ref:`command line arguments <sec:commandline>`) that will create multiple runtime 
+instances in the same process, and the ``proc`` argument specifies which processor the 
+runtime instance should be associated with. 
+
+After the runtime is started, users can also universally obtain access to the command line
+parameters passed into the Legion runtime using the following method:
+
+.. code-block:: c++
+
+  struct InputArgs {
+    char **argv;
+    int argc;
+  };
+
+  static const InputArgs& Runtime::get_input_args(void);
+
+This method will return an ``InputArgs`` struct which contains ``argc`` and ``argv``
+members. As is convention, ``argc`` is the number of arguments in the array of strings
+each representing an individual command line argument in ``argv``.
+
 .. _sec:registrationcallbacks:
 
 Registration Callbacks
@@ -203,6 +251,101 @@ Registration Callbacks
 
 Launching Top-Level Tasks
 =========================
+
+All computation performed by Legion must be done inside of :ref:`tasks <chap:tasks>`.
+A Legion client that has :ref:`started the runtime in background mode <sec:startup>`
+can launch *top-level tasks* to start new computations to be performed by Legion. 
+As we will discuss :ref:`later <chap:tasks>`, each top-level task serves as the
+root of a tree of tasks and operations that constitute a Legion program.
+
+.. note::
+  The Legion programming model ensures that each Legion program, consisting of a 
+  tree of tasks rooted by a unique top-level task, is an isolated Legion program and 
+  there are no sanctioned mechanisms by which they can cooperate, coordinate, or synchronize.
+  The one exception is that the same mapper can be used to map tasks from different 
+  top-level task trees and coordinate their resource utilization since they are 
+  competing to run on the same hardware.
+
+There are two mechanisms by which Legion clients can launch new top-level tasks.
+First, they can use the following method to asynchronously dispatch new top-level
+tasks.
+
+.. code-block:: c++
+
+  Future Runtime::launch_top_level_task(const TaskLauncher&);
+
+This method will create new task top-level task as described by the ``TaskLauncher`` 
+object, which has identical semantics to when it is used to 
+:ref:`create subtasks <sec:subtasks>`. This method will return immediately and produce
+a ``Future`` object, which we also we cover :ref:`later <sec:futures>`. Legion clients
+can invoke this method an arbitrary number of times until ``wait_for_shutdown`` is
+invoked. Invoking this method after ``wait_for_shutdown`` has been called will result
+in undefined behavior.
+
+In addition to creating explicit top-level tasks running inside of Legion, applications
+can also choose to draft their existing threads into service as *implicit top-level tasks*.
+An implicit top-level task is simply top-level task that is being executed by a thread 
+not created or managed by the Legion runtime. This idiom is commonly used by applications
+that are using Legion as a client accelerator runtime, where the main application is 
+running along and occassionally wanting to offload computational work to Legion. Implicit
+top-level tasks are started by invoking the following method.
+
+.. code-block:: c++
+
+  Context Runtime::begin_implicit_task(TaskID top_task_id,
+                                       MapperID mapper_id,
+                                       Processor::Kind proc_kind,
+                                       const char *task_name = NULL,
+                                       bool control_replicable = false,
+                                       unsigned shard_per_address_space = 1,
+                                       int shard_id = -1);
+
+This method will draft the calling thread into service as a new top-level task to
+execute the task associated with ``top_task_id`` and using ``mapper_id`` for handling
+any :ref:`mapping decisions <chap:mapping>` associated with this task. The ``proc_kind``
+argument specifies the kind of processor this thread should be regarded as, such as a
+CPU or a GPU processor. Callers can provide an optional name for this task with the
+``task_name`` parameter. In cases where this method is being invoked to start a new
+:ref:`control-replicated <chap:ctrlrepl>` top-level task, the ``control_replicable``
+parameter must be set to ``true``. If the implicit top-level task is being 
+control-replicated, then it must also specify the number of expected invocations of
+this method per process with the ``shard_per_address_space`` parameter, with the
+understanding that each caller thread will be a unique :ref:`shard <sec:sharding>` 
+in the execution of the control-replicated task. The ``shard_id`` parameter must be
+a unique integer for each caller into ``begin_implicit_task`` for each new top-level
+task being created (``shard_id`` does not need to be unique across different invocations
+of ``begin_implicit_task``). Note that in the case of control-replicated implicit
+top-level tasks, the runtime is performing an implicit parallel-rendezvous operation
+and therefore it is incumbent upon the caller to ensure a happens-before relationship
+across external (non-Legion) threads and processes when invoking ``begin_implicit_tasks`` 
+for starting multiple different implicit top-level tasks. Only one implicit top-level
+task can be bound to each external thread at a time. Invoking ``begin_implicit_task``
+on an external thread that already has another top-level task bound to it will result
+in undefined behavior.
+
+The ``begin_implicit_task`` method returns a ``Context`` handle which
+represents the enclosing :ref:`task context <sec:contexts>` and can be used to perform
+runtime calls that can only occur inside of tasks. The context will remain live and
+and the thread will continue to be bound to the implicit top-level task, until the 
+application invokes the following method to indicate the completion of the top-level task.
+
+.. code-block:: c++
+
+  void Runtime::finish_implicit_task(Context ctx);
+
+This method will unbind the executing thread from the implicit task represented
+by ``ctx``. This method must be invoked on the same thread the called
+``begin_implicit_task``. Invoking it on a different thread will result in 
+undefined behavior. Similarly, it should be invoked exactly once for each 
+implicit top-level task as multiple invocations will result in undefined behavior.
+Undefined behavior will also result if this method is invoked on a ``ctx``
+that was not created by a call to ``begin_implicit_task``. Note that this method
+will not block to wait for the top-level task to finish. The ``Future`` object
+returned by ``begin_implicit_task`` should be consulted to determine when the
+task and all its child operations are actually complete (see the section on
+:ref:`futures <sec:futures>` for more detail on how to use ``Future`` objects).
+As soon as ``finish_implicit_task`` returns, the external thread becomes eligible 
+for being bound to another implicit top-level task.
 
 .. _sec:commandline:
 
