@@ -74,12 +74,12 @@ Online Profiling
 Inter-Mapper Communication
 ==========================
 
-.. _sec:default mapper:
+.. _sec:defaultmapper:
 
 The Default Mapper
 ==================
 
-.. _sec:custom mappers:
+.. _sec:custommappers:
 
 Custom Mappers
 ==============

@@ -19,6 +19,13 @@ Subtasks
 Futures
 =======
 
+.. _sec:threading:
+
+Threading Model
+===============
+
+.. tls, preemption
+
 .. _sec:predication:
 
 Predicated Execution
