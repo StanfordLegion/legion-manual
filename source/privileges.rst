@@ -24,7 +24,10 @@ Region Requirements
 Reduction Operators
 ===================
 
-.. built-in reductions
+.. _subsec:builtinredops:
+
+Built-In Reduction Operators
+----------------------------
 
 .. _sec:outputreqs:
 

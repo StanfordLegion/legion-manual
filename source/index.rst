@@ -13,8 +13,8 @@ have contributed to the project. Throughout this period new application
 developers have learned Legion through a combination of examples, lore 
 from other members of the project, research papers and reading the 
 source code of the Legion implementation.  The intention here is to put 
-down in a systematic fashion what a programmer who wants to use
-Legion to develop high performance applications needs to know.
+down, in a systematic fashion, a complete specification of the Legion
+API and its semantics for users to reference when developing Legion programs.
 
 .. toctree::
    :maxdepth: 2
