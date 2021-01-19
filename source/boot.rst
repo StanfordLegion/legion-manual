@@ -129,6 +129,34 @@ operations, etc. All of these resources can also be registered
 but for applications that know these resources up-front, it can be 
 useful to preregister these resources. 
 
+Before performing any registrations, the Legion provides a series of 
+methods that enable applications to generate IDs for naming these
+resources. Only methods that begin with ``generate_static_*`` are 
+permitted to be called during the pre-registration phase. Each call
+to one of these methods in each process will return a unique ID. The
+same ID will be returned across all the processes for each individual
+call into the runtime (consistent with SPMD semantics). Each ID is a
+``typedef`` for an ``unsigned int`` type.
+
+.. code-block:: c++
+
+  static MapperID Runtime::generate_static_mapper_id(void)
+  static TraceID Runtime::generate_static_trace_id(void);
+  static ProjectionID Runtime::generate_static_projection_id(void);
+  static ShardingID Runtime::generate_static_sharding_id(void);
+  static ReductionOpID Runtime::generate_static_reduction_id(void);
+  static CustomSerdezID Runtime::generate_static_serdez_id(void);
+  static LayoutConstraintID Runtime::generate_static_layout_id(void);
+  static TaskID Runtime::generate_static_task_id(void);
+
+Each of these resources also comes with a corresponding ``preregistration_*``
+method in order to pre-register the necessary data for this kind of
+resource with the runtime. Since we have not introduced the necessary
+terminology for describing these resources yet, we will briefly 
+introduce each of the methods and that provide forward references for
+where users can read about the specific resources kinds.
+
+
 
 .. _sec:startup:
 

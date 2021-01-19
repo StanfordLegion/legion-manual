@@ -4,6 +4,11 @@
 Mapping
 *******
 
+.. _sec:machine:
+
+Machine Model and Query Interface
+=================================
+
 .. _sec:interface:
 
 The Mapping Interface
@@ -13,6 +18,8 @@ The Mapping Interface
 
 Mapper Execution Model
 ======================
+
+.. mapper synchronization model
 
 .. _sec:layoutconstraints:
 
@@ -34,11 +41,6 @@ Task Variants
 Physical Instances
 ==================
 
-.. _sec:machine:
-
-Machine Model and Query Interface
-=================================
-
 .. _sec:maptasks:
 
 Mapping Tasks
@@ -53,6 +55,8 @@ Mapping Other Operations
 
 Managing Deferred Execution
 ===========================
+
+.. don't forget about frames
 
 .. _sec:garbagecollection:
 
