@@ -210,14 +210,108 @@ specify known compile-time dependences on previous task launches via
 ``StaticDependence`` descriptors. We cover how static dependences are 
 specified when we describe :ref:`static tracing <sec:statictracing>`.
 
+The ``enable_inlining`` flag indicates to the runtime whether this task should
+be eligible for :ref:`inlining <sec:inlining>` in the parent task. The mapper will
+ultimately given the choice of whether to inline the task or not as part of
+its dynamic dispatch mechanism. However, there is a small performance penalty
+associated with giving the mapper this option as execution must wait for the
+mapper to make this decision. Therefore applications must explicitly opt into
+giving the mapper the choice to inline a subtask launch. To avoid this overhead
+in the common case, this flag defaults to ``false``.
 
+The ``local_function`` flag indicates to the runtime that this is a subtask
+operating solely on future values with no region arguments. This permits a
+very light-weight execution strategy for the task and allows it to be trivially
+replicated if the parent task is :ref:`control replicated <chap:ctrlrepl>`.
+This is only a performance optimization and has no bearning on the correctness
+of the code. The default value for this flag is ``false``.
+
+The ``independent_requirements`` flag allows applications to communicate to
+the runtime that the all of the :ref:`region requirements <sec:reqs>` of this
+task launch are independent from each other. This means that they are have
+no :ref:`fields <sec:fieldspaces>` in common, access different 
+:ref:`region trees <sec:logicalregions>`, or their subregions are strictly
+*disjoint* (non-overlapping) from each other. Region requirements which are
+overlapping but have non-interfering :ref:`privileges <sec:modes>` are not
+permitted. Setting this flag to ``true`` will enable several performance
+optimizations inside the runtime implementation that will reduce the overhead
+of the dependence analysis for this task. Undefined behavior will result if
+this flag is set to ``true``, but the regions are not actually independent.
+The runtime has no mechanism by which to detect the violation. The default
+value for this flag is ``false``.
+
+The ``silence_warnings`` flag can be set to ``true`` in order to silence any
+runtime warnings associated with this task. This is useful in cases where
+users know that in some circumstances warnings can be safely ignored, thereby
+filtering out the warning messages to arrive at the most important ones. This
+flag defaults to ``false``.
+
+After an application has configured a ``TaskLauncher`` object for a subtask
+execution. The subtask is dispatched using the ``execute_task`` method on
+the ``Runtime``. Users must pass in a :ref:`Context <sec:contexts>` handle
+specific to the parent task. Users can also pass in an optional pointer to
+a vector of ``OutputRequirement`` objects which :ref:`describe new regions
+that will be created by the task <sec:outputreqs>`. Except for in the case
+of :ref:`inlining <sec:inlining>`, this method will return immediately as
+all subtask launches in Legion are performed asynchonously. All contents of
+the ``TaskLauncher`` object are needed to execute the subtask are copied 
+by the runtime by the implementation of ``execute_task``, so at the completion
+of the method invocation, it is safe to re-use the launcher for additional
+subtask launches. The ``const`` qualifier on the ``TaskLauncher`` reference
+guarantees that the ``execute_task`` implementation does not modify the
+``TaskLauncher``. Each dynamic invocation of ``execute_task`` with a 
+``TaskLauncher`` object will produce a new dynamic task at execution. The
+return value of ``execute_task`` is a ``Future``. :ref:`Futures <sec:futures>`
+encapsulate the return value of the task and also provide a mechanism for
+synchronizing subtask execution if descired. ``Future`` handles are always
+returned for tasks, even those with ``void`` return types as the future can
+still be useful for synchonization purposes.
 
 .. _sec:contexts:
 
 Contexts
 ========
 
-.. _sec:futures:
+``Context`` objects are opaque light-weight handles that provide the runtime
+an easy mechanism for recognizing which parent task *context* runtime calls
+are being performed in. When a task begins executing, the runtime provides a
+``Context`` handle as the first argument to the task. This handle should then
+be used for all method calls into the ``Runtime`` that require a ``Context``
+argument (nearly always the first argument in such methods). ``Context``
+handles are inexpensive to pass-by-value (usually only four or eight bytes
+depending on the target architecture). Users should therefore feel no need
+to pass them by reference or pass pointers to them. They will always be 
+`trivially copyable <https://en.cppreference.com/w/cpp/types/is_trivially_copyable>`_.
+
+The lifetime of a ``Context`` handle is only for the duration of the execution
+of the task for which it was produced. Users should therefore never store
+``Context`` values in data structures that persist beyond the execution of 
+a task. Using a ``Context`` handle after the execution of the task for which 
+it was created will result in undefined behavior.
+
+In keeping with our :ref:`coarse-grained functional philosophy <sec:funcimperative>`,
+we recommend that applications design functional abstractions that accept
+``Context`` handles as arguments to pass through for launching off subtasks
+and other operations. In essence, the ``Context`` handle is the 
+`monad <https://wiki.haskell.org/Monad>`_ that specifies the functional 
+order of subtasks and other operations being launched by a parent task, even
+if they ultimately are executed in a different order. Therefore, passing it by
+value and threading it through functions is consistent with how functional 
+programming launguages encourage code development. To ease this burden though
+for more imperative users, we also support a runtime method that will return
+the ``Context`` handle for the executing task if we are inside of one:
+
+.. code:: c++
+
+  static Context Runtime::get_context(void);
+
+If we are inside of an executing task, this will return an identical ``Context``
+handle. If we are not inside of a task, then it will raise an error. Note that
+this method is ``static`` and can therefore be invoked arbitrarily, anywhere
+in a program. While we do not recommend this style of code development, it is
+and always remaing completely legal to development Legion programs using it.
+
+..  _sec:futures:
 
 Futures
 =======

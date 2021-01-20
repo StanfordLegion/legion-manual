@@ -24,6 +24,11 @@ Deferred Execution
 Productivity versus Expressivity and Control
 ============================================
 
+.. _sec:funcimperative:
+
+Coarse-Grained Functional/Fine-Grained Imperative
+=================================================
+
 .. _sec:composition:
 
 Radical Software Composition
