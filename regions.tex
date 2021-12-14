@@ -84,8 +84,8 @@ region.
 \label{fig:lr1}
 \end{figure}
 
-\section{Physical Instances, Region Requirements, Permissions and Accessors}
-\label{sec:permissions}
+\section{Physical Instances, Region Requirements, Privileges and Accessors}
+\label{sec:privileges}
 
 Actually doing something with a logical region requires a {\em
   physical instance}.  The simplest way to create a physical instance
@@ -96,7 +96,7 @@ the region by previous tasks that the subtask depends on.  In the
 common case, this means that the results of all previously launched
 tasks that updated the region will be reflected in the instance, but
 the programmer can specify other semantics if desired; see
-Section~\ref{sec:coherence}.
+Section~\ref{chap:coherence}.
 
 \begin{figure}
 {\small
@@ -113,11 +113,11 @@ Section~\ref{sec:coherence}.
 \end{lstlisting}
 }
 \caption{Task launches from \legionbook{Regions/physicalregions/physicalregions.cc.}}
-\label{fig:permissions}
+\label{fig:privileges}
 \end{figure}
 
 
-Figure~\ref{fig:permissions} shows an excerpt from the top level task in \\
+Figure~\ref{fig:privileges} shows an excerpt from the top level task in \\
 \legionbook{Regions/physicalregions/physicalregions.cc}.  This program is an extension of the
 program in Figure~\ref{fig:lr1}---the creation of the (single) logical region is exactly the same as in the 
 previous example.  Here we call two tasks that operate on the logical region {\tt lr}. The first
@@ -132,24 +132,24 @@ method {\tt add\_region\_requirement}.  A {\tt RegionRequirement} has four compo
 
 \item The logical region that will be accessed.
 
-\item A {\em permission}, which indicates how the subtask will
+\item A {\em privilege}, which indicates how the subtask will
   use the logical region.  In this program, the two tasks have
-  different permissions: the initialization task accesses the region
-  with permission {\tt WRITE\_DISCARD} (which means it will overwrite
+  different privileges: the initialization task accesses the region
+  with privilege {\tt WRITE\_DISCARD} (which means it will overwrite
   everything that was previously in the region) and the sum task
-  accesses the region with permission {\tt READ\_ONLY}.  Permissions are
+  accesses the region with privilege {\tt READ\_ONLY}.  Privileges are
   used by the Legion runtime to determine which tasks can run in
   parallel.  For example, if two tasks only read from a region, they
-  can execute simultaneously.  Other interesting permissions that we
+  can execute simultaneously.  Other interesting privileges that we
   will see in future examples are {\tt READ\_WRITE} (the task both
   reads and writes the region), {\tt WRITE} (the task only writes the
   region, but may not update every element as in {\tt
     WRITE\_DISCARD}), and {\tt REDUCE} (the task performs reductions
   to the region).  It is an error to attempt to access a region in a
-  manner inconsistent with the permissions, and most such errors can be
+  manner inconsistent with the privileges, and most such errors can be
   checked by the Legion runtime with appropriate debugging settings.
   The runtime cannot check
-  that every element is updated when using permission {\tt
+  that every element is updated when using privilege {\tt
     WRITE\_DISCARD} and failure to do so may result in incorrect
   behavior.
 
@@ -221,7 +221,7 @@ The other requirement to access the region is knowledge of the region's index sp
 illustrates how to recover a region's index space from a physical instance of the region using the {\tt get\_index\_space} method.
 Since this region has a dense index space, we convert the domain to a rectangle (using the {\tt get\_rect} method).
 All that is left, then, is to iterate over all the points of the index space (the rectangle {\tt rect}) and read the
-field {\tt FIELD\_A} for each such point in the region using the field accessor {\tt acc}.
+field {\tt FIELD\_A} for each such point in the region using the field accessor {\tt fa\_a}.
 
 \section{Fill Fields}
 \label{sec:fill}
@@ -253,7 +253,7 @@ occurrence of {\tt FIELD\_A} to 1.  The {\tt fill\_field} method takes six argum
 \item The second argument is the region to be initialized.
 
 \item The third argument is the parent region, or the region itself if it has no parent.  The parent region is needed
-to ensure that there are sufficient privileges to perform the initialization ({\tt READ\_WRITE} permission
+to ensure that there are sufficient privileges to perform the initialization ({\tt READ\_WRITE} privilege
 is required).
 
 \item The fourth argument is the ID of the field to be initialized.
@@ -310,7 +310,7 @@ instance to become valid before it can be used.
 A important invariant maintained by the Legion runtime system is that
 tasks have exclusive access to regions to which they have write access
 (we will see how to relax this requirement in
-Chapter~\ref{chapter:coherence}).  This invariant implies that when a
+Chapter~\ref{chap:coherence}).  This invariant implies that when a
 parent task calls a child task, any regions passed to the child that
 may be written must be unmapped before the call and remapped after the
 call.  (To see that unmapping a region before passing it to a child

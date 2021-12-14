@@ -104,7 +104,7 @@ As mentioned above, every task must be registered with the Legion runtime before
 the runtime's {\tt start} method is called.  Registration passes several arguments about a
 task to the runtime:
 \begin{itemize}
-\item The name of the subtask is a template argument to the {\tt register\_legion\_task} method.
+\item The name of the task is a template argument to the {\tt register\_legion\_task} method.
 
 \item The task ID is the first (regular) argument.
 
@@ -130,8 +130,8 @@ single node (i.e., the same address space) the program is likely to
 work, but when efforts are made to scale up the application by running
 on multiple nodes, \Cpp\ crashes result from the wild pointers or
 references to distinct instances of global variables of the same name
-in different address spaces.  It is possible to pass data structures
-between tasks, but not by using \Cpp\ pointers (see
+in different address spaces.  Legion provides its own abstractions for
+passing data structures between tasks (see
 Chapter~\ref{chap:regions}).
 
 All tasks have the same input signature as {\tt sum\_task}:
@@ -207,7 +207,7 @@ same address space as the parent task, the buffer referenced by the {\tt
 
 {\tt TaskArgument} objects should be used to pass small amounts of data,
 such as an integer, float, struct or a (very) small array.  To pass large amounts of
-data, use regions (see Chapter~\ref{chap:regions}).  As
+data, use {\em regions} (see Chapter~\ref{chap:regions}).  As
 discussed earlier in this chapter, task arguments may not contain
 \Cpp\ pointers or references.  In addition, task arguments may not contain
 futures (see Section~\ref{sec:futures}).
@@ -231,8 +231,8 @@ the subtask is running (potentially) in parallel.  In {\tt
 sending each subtask a unique integer argument that the subtask simply prints
 out.  Compile and run {\tt subtask.cc} and observe that the
 parent task reports that it is done launching all of the subtasks
-before all of the subtasks execute.  Second, parent tasks do not
-terminate until all of the child tasks have terminated.  Thus, even
+before all of the subtasks execute.  Second, a parent task does not
+terminate until all of its child tasks have terminated.  Thus, even
 though {\tt top\_level\_task} reaches the end of its function body
 before all of its child tasks have completed, at that point the parent
 task waits until all the child tasks terminate, at which point
@@ -425,7 +425,7 @@ single operation.  The main reason for using such {\em index launches}
 is efficiency, as the overhead of starting $n$ tasks with a single
 call is much less than launching $n$ separate tasks, and the
 difference in performance only grows with $n$.  Thus, when launching
-even tens of tasks, as index launch should be used if possible.  Not
+even tens of tasks, an index launch should be used if possible.  Not
 all sets of tasks can be initiated using an index launch; 
 index launches are for executing multiple instances of the same task
 where all of the task instances can run in parallel.
@@ -493,7 +493,7 @@ new Legion runtime calls.  First a one dimensional {\tt Rect}
 be launched for each point in the {\tt Domain}.  Currently, only
 {\tt Rects} can be used to define the index space of an index task launch.
 
-When launching mutliple tasks simultaneously, we need some way to
+When launching multiple tasks simultaneously, we need some way to
 describe for each task what argument it should receive.  There are two
 kinds of arguments that Legion supports: arguments that are common to
 all tasks (i.e., the same value is passed to all the tasks) and
@@ -521,7 +521,7 @@ space to a {\tt Future}.  Figure~\ref{fig:indexlaunch} shows one way to
 use the {\tt FutureMap} by converting it to an {\tt ArgumentMap} that is passed to
 the index launch for the consumer tasks.  Note that the launch of the consumer subtasks
 does not block waiting for all of the futures to be resolved; instead, each consumer subtask
-runs only afer the future it depends on is resolved.
+runs only after the future it depends on is resolved.
 
 The subtask definitions are straightforward.  Note that the argument specific to the subtask is
 in the field {\tt task->local\_args}.  Also note that when the consumer task actually runs 

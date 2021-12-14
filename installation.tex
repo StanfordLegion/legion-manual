@@ -1,4 +1,3 @@
-
 \chapter{Installation}
 \label{chap:start}
 
@@ -7,7 +6,7 @@ links to everything associated with the project, including a set of
 tutorials that are distinct from this manual.  The Legion distribution is at
 \url{https://github.com/StanfordLegion/legion}.  The distribution has been
 tested on Linux machines and Mac OS X.  To install, in a shell type
-\begin{lstlisting}[language=bash]
+\begin{lstlisting}
 > cd DIR
 > git clone https://github.com/StanfordLegion/legion
 \end{lstlisting}
@@ -19,20 +18,10 @@ For {\tt bash} users, an example {\tt .bashrc} is included in
 
 \section{Regent}
 
-If only the Legion \Cpp\ runtime is desired, there is no need to install Regent, the companion
-Legion programming language, and this section can be ignored.  To install Regent, download LLVM
-from the following URL
-{\small\url{http://llvm.org/releases/3.4.2/clang+llvm-3.4.2-x86_64-apple-darwin10.9.xz}}
-and extract it in a directory of your choice:
-{\small
-\begin{verbatim}
-> cd DIR
-> tar xf http://llvm.org/releases/3.4.2/clang+llvm-3.4.2-x86_64-apple-darwin10.9.xz
-\end{verbatim}
-}
-You must then put the LLVM {\tt bin} directory in your search {\tt
-  PATH} and the LLVM {\tt lib} in yor {\tt DYD\_LIBRARY\_PATH}.  The
-example {\tt .bashrc} file in \legionbook{Installation} contains the
-necessary commands for {\tt bash} users.
+Regent is the companion programming language for Legion.  Regent provides the same
+programming model as the Legion \Cpp\ API, but with a nicer syntax, static checking
+of various requirements of Legion programs, and compile-time optimizations.
+Instructions for installing Regent are maintained at \url{http:regent-lang.org/install}.
+
 
 
