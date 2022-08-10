@@ -81,7 +81,13 @@ int main(int argc, char **argv)
 \end{figure}
 
 Figure~\ref{fig:simple} shows a very simple, but complete, Legion program for summing
-the first 1000 positive integers (also available as {\tt sum.cc} in \legionbook{Tasks}).  
+the first 1000 positive integers (also available as {\tt sum.cc} in \legionbook{Tasks}).
+This example, like every other example in this manual, can be run by first setting an environment variable to point to the Legion runtime
+\begin{verbatim}
+export LG_RT_DIR="...path to legion directory.../legion/runtime"
+\end{verbatim}
+and then typing {\tt make} in the directory containing the example.
+
 At a high level, every Legion program has three components:
 \begin{itemize}
 \item The id of the top-level task must be set with Legion's {\em high level runtime}.  The top-level
@@ -97,7 +103,7 @@ Legion runtime starts up.  Note that the program does not say where the task is 
 at runtime by the {\em mapper} (see Chapter~\ref{chap:mapping}).  Note also that tasks can perform almost arbitrary
 \Cpp\ computations.  In the case of {\tt sum\_task}, the computation performed is very simple, but in general tasks
 can call ordinary \Cpp\ functions, including allocating and deallocating memory.  Tasks must not, however,
-call directly into other packages that provide parallelism or concurrency.  Interoperation with MPI is
+call directly into other packages that provide parallelism or concurrency.  Interoperation with OpenMP and MPI is
 possible but must be done in a standardized way (see Chapter~\ref{chap:interop}).  
 
 As mentioned above, every task must be registered with the Legion runtime before
@@ -394,7 +400,7 @@ small.overlaps(big)
 small.intersection(big) == small   
 \end{verbatim}
 Note that the intersection of two rectangles is always a rectangle.
-A {\em domain} is alternative type for rectangles.  A {\tt Rect} can be converted to a {\tt Domain}:
+A {\em domain} is an alternative type for rectangles.  A {\tt Rect} can be converted to a {\tt Domain}:
 \begin{verbatim}
 Domain bigdomain = big;
 \end{verbatim}
