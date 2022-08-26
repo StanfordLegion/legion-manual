@@ -1,14 +1,183 @@
 \chapter{Partitioning}
 \label{chap:partitioning}
 
-\section{Independent Partitions}
+The ability to partition regions into {\em subregions} is a core
+feature of Legion.  Many parallel programming systems have some notion
+of a distributed collection---a collection of data that is broken up
+into pieces and put in different places across a distributed machine.  In
+Legion, the facilities for partitioning data are more expressive than most
+ther programming systems in
+several important ways.  First, partitioning can be done recursively
+to arbitrary levels: regions can be partitioned into subregions, which
+can themselves be partitioned further into additional
+subregions, and
+so on.  The partitioning hierarchy defines a tree, called the {\em
+  region tree}, that is a useful abstraction of how data is organized
+in a Legion application.  An important step in designing a Legion
+application is deciding how data will be partitioned---i.e., deciding
+what the region tree will look like.
+
+A second distinguishing characteristic is that partitioning is done dynamically: The application can create and destroy region partitions at runtime.  Thus, Legion can naturally express methods where the organization of data needs to change during the computation, such as adaptive mesh refinement algorithms.  It is worth remembering, however, that partitioning can be an expensive operation, so it is important that it be used judiciously.  As long as the cost of the partitioning is amortized over lots of computation on the partition's subregions, no performance problems from partitioning will arise.
+
+A third distinguishing characteristic is that partitions are themselves first-class objects in Legion.  A {\em partition} is a collection of subregions, and Legion
+has many different built-in operations for creating useful partitions; presenting the
+most common of these methods for partitioning data is the heart of this chapter.
+
+Partitions do not need to be mathematical partitions, in fact
+in Legion a partition can be {\em any} set of subsets of a region.
+It is important to keep in mind that partitions only name subsets of data;
+a partition does not allocated storage for the subregions or make copies of data.
+This feature of partitions leads to some useful programming idioms.  For example, a program
+can create a very large region, perhaps with billions of elements, and
+then partition it and only materialize needed subregions, which is useful
+in cases where there is a very large potential domain but only a relatively
+small subset will actually be used.  It is also common to create a region
+too large to fit in any physical memory, partition it into subregions that will
+fit on each node, and then create physical instances only of the subregions.
+The global name space is still useful (e.g., in neighbor computations for stencils)
+even if the parent region is never physically allocated.
+
+The subregions in a partition can overlap (share elements), in which
+case we say the partition is {\em aliased}; otherwise the partition is
+{\em disjoint}.  For example, aliased subregions can be useful in
+describing stencil patterns, where the subblocks overlap by the width
+of the stencil perations.  A {\em complete} partition is one in which
+every element of the partitioned region is in at least one subregion
+of the partition.  Partitions in Legion do not need to be complete; as an example,
+it is often useful to name only the overlapping boundaries of blocks in stencils (the so-called {\em ghost regions}, which are a strict subset of the entire computational domain.
+
+These idioms for using partitions are illustrated in the examples in the Legion repository.  In this tutorial we focus on illustrating the basic application of
+the most commonly used Legion partitioning operators.
+
+\section{Equal Partitions}
 \label{sec:equal}
-equal, partition by field, partition by restriction?
+
+The simplest and most common case of partitioning is an {\em equal}
+partition, where a region is automatically partitioned into subregions
+of approximately equal size.  Figure~\ref{fig:equalpart} gives an
+example of partitioning a region into four equal-size subregions.  The
+number of subregions in the partition is given by an index space, with
+one subregion created for each of the index space's points.  On line
+17 of Figure~\ref{fig:equalpart} an index space with four points is
+created from a 1D {\tt Rect} defined on line 16.  This set of {\em
+  colors} (the term for the points in an index space
+used for naming the subregions of a partition) is passed as an
+argument to {\tt create\_equal\_partition} on line 18.  Note that the
+partitioning operation is applied to the index space, not directly to
+a logical region.  By partitioning the index space, the same
+partitioning can be reused for multiple logical regions that share an
+index space.  The {\tt get\_logical\_partition} call on line 19
+returns the logical partition of the region defined by the index
+partition.
+
+Lines 25-28 illustrate an important Legion idiom where an index launch is performed
+over the subregions of a partition.  Here the {\tt sum\_task} is applied to each
+subregion of the {\tt lp} partition of the region {\tt lr}.   Note that {\tt IndexLauncher} created on line 25 uses the color space of the partition as its launch domain.  A region requirement for {\tt sum\_task} is added to the launcher on line 26.
+We saw region requirements in Chapter~\ref{chap:regions} for launches of individual
+tasks.  Region requirements for index launches have slightly different arguments:
+
+\begin{itemize}
+\item For an index launch the first argument is a logical partition. (For an individual task the first argument is a logical region.)
+
+\item If the first argument is a logical partition, then the second argument is the identifier of a {\em projection functor} $f$. For index point $i$ in the launch space
+  and logical partition $lp$,,
+  the task is passed $f(lp,i)$ as its argument.   Projection function 0 is predefined to return the $i$th subregion for the $i$th point in the launch domain---i.e., the task will be applied to every subregion of $lp$, which is the most common case in practice. Users can write and register their own projection functors with the runtime
+  system, much like task registration, for more complex patterns of selecting
+  the arguemnts to index tasks from a region tree.
+
+\item The rest of the fields are the same for both kinds of region requirements: the privilege for the region ({\tt READ\_ONLY} in this example), the coherence mode ({\tt EXCLUSIVE}), and the parent region ({\tt lr}) from which privileges are derived.
+\end{itemize}
+On line 27 the field {\tt FIELD\_A} is added to the region requirement.  The naming of the fields in a region requirment is separated from the region requirement's construction because any number of fields can be part of a region requirement; these are all the fields that the task will touch with the given permissions and coherence mode.
+
+The execution of the launcher on line 28 runs {\tt sum\_task} on all the subregion sof {\tt lp}.  Instead of summing the entire region, the same {\tt sum\_task} is now used to sum all four subregions separately.
+
+
+An equal partition is an example of a mathematical partition: an equal partition is always both disjoint (none of the subregions overlap) and complete (every element of the region is included in some subregion).
+
+
+
+
+\begin{figure}
+  {\small
+   \lstinputlisting[linerange={15-49}]{Examples/Partitions/equal/equal.cc}
+  }
+  \caption{\legionbook{Partitions/equal/equal.cc}}
+  \label{fig:equalpart}
+\end{figure}
+
+
+\section{Partition by Field}
+\label{sec:pbf}
+
+Equal partitioning leaves the choice of how to partition the elements of a region
+up to the runtime system, provided that the sizes of subregions are
+equal or nearly equal.  At the other extreme is {\em partition by field}, where
+the application prescribes for each individual element of a region which subregion it should be assigned to.
+
+The program in Figure~\ref{fig:pbf} illustrates partitioning by field.  This example is similar to the previous one,
+but there is now an additional field {\tt FIELD\_PARTITION} that holds a coloring of the elements of the region.
+The {\tt color\_launcher} on lines 23-26 invokes the {\tt color\_task} which assigns a color (a {\tt Point<1>} in this example; colors can be multidimensional points) to each
+element of the region.  In this case the assignment is a simple blocking, with each contiguous quarter of the elements assigned the same
+color (lines 46-56; the function uses the number of colors as the divisor, which is 4 in this example), but the coloring could be any assignment of the color space to the elements of the field.  Note also that the
+coloring is dynamically computed; programs can compute a coloring for a field and then partition the region accordingly.
+
+The actual partitioning of the index space occurs on line 28.  The runtime call {\tt create\_partition\_by\_field} takes the current
+context, the region, the parent region (or the same region if it has no parent, as in this case), and the field with the coloring.
+On line 29 the partition of the index space is used to retrieve the logical partition, as in Figure~\ref{fig:equalpart}.
+
+The logic for launching the {\tt sum\_task} over the paritition on lines 31-35 is the same as in Figure~\ref{fig:equalpart}.
+
+\begin{figure}
+  {\small
+   \lstinputlisting[linerange={17-74}]{"Examples/Partitions/partition_by_field/pbf.cc"}
+  }
+  \caption{\legionbook{Partitions/partition\_by\_field/pbf.cc}}
+  \label{fig:pbf}
+\end{figure}
+
+\section{Partition by Restriction}
+\label{sec:pbr}
+
+\begin{figure}
+  {\small
+   \lstinputlisting[linerange={15-49}]{"Examples/Partitions/partition_by_restriction/pbr.cc"}
+  }
+  \caption{\legionbook{Partitions/partition\_by\_restriction/pbr.cc}}
+  \label{fig:pbr}
+\end{figure}
+
+
 \section{Set-Based Partitions}
 \label{sec:set}
 
-\section{Image and Preimage Partitions}
+\begin{figure}
+  {\small
+   \lstinputlisting[linerange={23-87}]{Examples/Partitions/sets/sets.cc}
+  }
+  \caption{\legionbook{Partitions/sets/sets.cc}}
+  \label{fig:sets}
+\end{figure}
+
+
+\section{Image Partitions}
 \label{sec:image}
 
+\begin{figure}
+  {\small
+    \lstinputlisting[linerange={17-76}]{Examples/Partitions/image/image.cc}
+  }
+  \caption{\legionbook{Partitions/image/image.cc}}
+  \label{fig:image}
+\end{figure}
 
+\section{Pre-Image Partitions}
+\label{sec:preimage}
+
+\begin{figure}
+  {\small
+   \lstinputlisting[linerange={17-74}]{"Examples/Partitions/pre_image/preimage.cc"}
+  }
+  \caption{\legionbook{Partitions/pre\_image/preimage.cc}}
+  \label{fig:preimage}
+\end{figure}
 

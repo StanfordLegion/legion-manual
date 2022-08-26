@@ -56,7 +56,7 @@ void top_level_task(const Task *task,
   for (int i = 0; i < points; i += 1)
   {
     int subtask_id = 2*i;
-    producer_arg_map.set_point(DomainPoint::from_point<1>(i+1), TaskArgument(&subtask_id,sizeof(int)));
+    producer_arg_map.set_point(Point<1>(i+1), TaskArgument(&subtask_id,sizeof(int)));
   }
   ProducerTasks  producer_launcher(launch_domain, producer_arg_map);
   // 

@@ -31,7 +31,7 @@ Legion tasks have several important properties:
 \begin{itemize}
 \item Tasks are the unit of parallelism in Legion; all parallelism occurs because tasks are executed in parallel.
 
-\item Tasks have {\em variants} specific to a particular kind of {\em processor} (most commonly CPUs or GPUs) and 
+\item Tasks have {\em variants} specific to a particular kind of {\em processor} (most commonly CPUs or GPUs, but there is also experimental support for FPGAs) and 
 memory layout of the task's arguments.  A task may have multiple variants.
 
 \item Once a task begins execution on a processor, that task will execute in its entirety on that processor---tasks do
@@ -41,41 +41,9 @@ not migrate mid-computation.
 
 
 \begin{figure}
-\begin{lstlisting}
-#include <cstdio>
-#include "legion.h"
-
-using namespace Legion;
-
-// All tasks must have a unique task id (a small integer).
-// A global enum is a convenient way to assign task ids.
-enum TaskID {
-  SUM_ID,
-};
-
-void sum_task(const Task *task,
-              const std::vector<PhysicalRegion> &regions,
-              Context ctx, 
-              Runtime *runtime)
-{
-  int sum = 0;
-  for (int i = 0; i <= 1000; i++) {
-    sum += i;
+  {\small
+    \lstinputlisting{Examples/Tasks/sum/sum.cc}
   }
-  printf("The sum of 0..1000 is %d\n", sum);
-}
-
-int main(int argc, char **argv)
-{
-  Runtime::set_top_level_task_id(SUM_ID);
-  Runtime::register_legion_task<sum_task>(
-        SUM_ID,
-	Processor::LOC_PROC, 
-	true/*single launch*/, 
-	false/*no multiple launch*/);
-  return Runtime::start(argc, argv);
-}
-\end{lstlisting}
 \caption{Tasks/sum/sum.cc}
 \label{fig:simple}
 \end{figure}
@@ -114,7 +82,7 @@ task to the runtime:
 
 \item The task ID is the first (regular) argument.
 
-\item The kind of processor the task can run on is the second argument.  Current options are
+\item The kind of processor the task can run on is the second argument.  The most important options are
 {\em latency optimized cores} or CPUs (constant {\tt LOC}) and {\em throughput optimized cores} or GPUs
 (constant {\tt TOC}).
 
@@ -160,30 +128,10 @@ should not directly manipulate the context.
 
 
 \begin{figure}
-\begin{lstlisting}
-void top_level_task(const Task *task,
-                    const std::vector<PhysicalRegion> &regions,
-                    Context ctx, 
-                    Runtime *runtime)
-{
-  printf("Top level task start.\n");
-  for(int i = 1; i <= 100; i++) {
-    TaskLauncher launcher(SUBTASK_ID, TaskArgument(&i,sizeof(int)));
-    runtime->execute_task(ctx,launcher);
-  }
-  printf("Top level task ddone launching subtasks.\n");
-}
-
-void subtask(const Task *task,
-             const std::vector<PhysicalRegion> &regions,
-             Context ctx,
-             Runtime *runtime)
-{
-  int subtask_number = *((int *) task->args);
-  printf("\tSubtask %d\n", subtask_number);
-}
-\end{lstlisting}
-\caption{\legionbook{Tasks/subtask/subtask.cc}}
+  {\small
+    \lstinputlisting{Examples/Tasks/subtasks/subtasks.cc}
+    }
+\caption{\legionbook{Tasks/subtasks/subtasks.cc}}
 \label{fig:subtask}
 \end{figure}
 
@@ -248,46 +196,8 @@ task waits until all the child tasks terminate, at which point
 \label{sec:futures}
 
 \begin{figure}
-\begin{lstlisting}
-void top_level_task(const Task *task,
-                    const std::vector<PhysicalRegion> &regions,
-                    Context ctx,
-                    Runtime *runtime)
-{
-  printf("Top level task start.\n");
-  for(int i = 1; i <= 100; i += 2) {
-    TaskLauncher producer_launcher(SUBTASK_PRODUCER_ID, 
-                                   TaskArgument(&i,sizeof(int)));
-    Future doubled_task_number =  
-            runtime->execute_task(ctx,producer_launcher);
-    TaskLauncher consumer_launcher(SUBTASK_CONSUMER_ID, 
-                                   TaskArgument(NULL,0));
-    consumer_launcher.add_future(doubled_task_number);
-    runtime->execute_task(ctx,consumer_launcher);
-  }
-  printf("Top level task done launching subtasks.\n");
-}
-
-int subtask_producer(const Task *task,
-                      const std::vector<PhysicalRegion> &regions,
-                      Context ctx,
-                      Runtime *runtime)
-{
-  int subtask_number = *((int *) task->args);
-  printf("\tProducer subtask %d\n", subtask_number);
-  return subtask_number + 1;
-}
-
-void subtask_consumer(const Task *task,
-                     const std::vector<PhysicalRegion> &regions,
-                     Context ctx,
-                     Runtime *runtime)
-{
-  Future f = task->futures[0];
-  int subtask_number = f.get_result<int>();
-  printf("\tConsumer subtask %d\n", subtask_number);
-}
-\end{lstlisting}
+  {\small
+    \lstinputlisting[linerange={14-48}]{Examples/Tasks/futures/futures.cc}}
 \caption{\legionbook{Tasks/futures/futures.cc}}
 \label{fig:futures}
 \end{figure}
@@ -408,7 +318,8 @@ The difference between the two types is that {\tt Rect}s are templated on the di
 are not.  Legion runtime methods generally take {\tt Domain} arguments and use {\tt Domain}s internally, but for application
 code the extra type checking provided by the {\tt Rect} type (which ensures that the operations are applied to {\tt Rect} arguments
 with compatible dimensions) is useful.  The recommended programming style is to create {\tt Rect}s and convert them to {\tt Domain}s
-at the point of a Legion runtime call.  It is also possible to work directly with the {\tt Domain} type, which has many
+at the point of a Legion runtime call.  Most of these type conversions will be handled implicitly---the programmer usually does not need to explicitly cast
+a {\tt Rect} to a {\tt Domain}. It is also possible to work directly with the {\tt Domain} type, which has many
 of the same methods as {\tt Rect} (see {\tt lowlevel.h} in the {\tt runtime/} directory).
 
 Analagous to {\tt Rect} and {\tt Domain}, there is a less-typed version of the type {\tt Point} called {\tt DomainPoint}.
@@ -438,48 +349,7 @@ where all of the task instances can run in parallel.
 
 \begin{figure}
 {\small
-\begin{lstlisting}
-void top_level_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, 
-		    Runtime *runtime)
-{
-  // Launch 50 tasks.
-  int points = 50;
-  const Rect<1> launch_domain(1,points);
-  ArgumentMap producer_arg_map;
-  for (int i = 0; i < points; i += 1)
-  {
-    int subtask_id = 2*i;
-    producer_arg_map.set_point(DomainPoint::from_point<1>(i+1), TaskArgument(&subtask_id,sizeof(int)));
-  }
-  ProducerTasks  producer_launcher(launch_domain, producer_arg_map);
-  FutureMap fm = runtime->execute_index_space(ctx, producer_launcher);
-  ArgumentMap consumer_arg_map(fm);
-  ConsumerTasks consumer_launcher(launch_domain, consumer_arg_map);
-  runtime->execute_index_space(ctx, consumer_launcher);
-}
-
-int subtask_producer(const Task *task,
-		     const std::vector<PhysicalRegion> &regions,
-		     Context ctx,
-		     Runtime *runtime)
-{
-  int subtask_number = *((const int *)task->local_args);
-  printf("\tProducer subtask %d\n", subtask_number);
-  return subtask_number + 1;
-}
-
-void subtask_consumer(const Task *task,
-		      const std::vector<PhysicalRegion> &regions,
-		      Context ctx,
-		      Runtime *runtime)
-{
-  int subtask_number = *((const int*)task->local_args);
-  printf("\tConsumer subtask %d\n", subtask_number);
-}
-\end{lstlisting}
-}
+\lstinputlisting[linerange={47-90}]{Examples/Tasks/indexlaunch/indexlaunch.cc}}
 \caption{\legionbook{Tasks/indexlaunch/indexlaunch.cc}}
 \label{fig:indexlaunch}
 \end{figure}
@@ -494,10 +364,7 @@ followed by another single call to launch all of the consumers.
 We now work through this example in detail, as it introduces several
 new Legion runtime calls.  First a one dimensional {\tt Rect} 
 {\tt launch\_domain} is created with the points {\tt 1..points}, where
-{\tt points} is set to 50. The {\tt Rect} is then converted to a {\tt
-  Domain} in preparation for passing it to a Legion call; one task will
-be launched for each point in the {\tt Domain}.  Currently, only
-{\tt Rects} can be used to define the index space of an index task launch.
+{\tt points} is set to 50.  Note that while the application code uses {\tt Rects} and {\tt Points} that the signatures of the runtime interfaces that are called use {\tt Domains} and {\tt DomainPoints} and Legion takes care of the conversions.
 
 When launching multiple tasks simultaneously, we need some way to
 describe for each task what argument it should receive.  There are two

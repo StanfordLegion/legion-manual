@@ -41,8 +41,8 @@ regions, thereby making it easier to keep all the regions in synch as the progra
 evolves.
 \end{itemize}
 
-The logical regions in this example never hold any data.  In
-fact, the logical regions consume no space except for their metadata
+Logical regions never hold any data.  In
+fact, logical regions consume no space except for their metadata
 (number of entries, names of the fields, etc.).  A {\em physical
   instance} of a logical region holds a copy of the actual data for
 that region.  The reason for having both concepts, logical region and
@@ -57,29 +57,7 @@ region.
 
 \begin{figure}
 {\small
-\begin{lstlisting}
-  // create an index space
-  Rect<1> rec(Point<1>(0),Point<1>(99));
-  IndexSpace is = runtime->create_index_space(ctx,rec);
-
-  // create a field space                          
-  FieldSpace fs = runtime->create_field_space(ctx);
-  FieldAllocator field_allocator = runtime->create_field_allocator(ctx,fs);
-  FieldID fida = field_allocator.allocate_field(sizeof(float), FIELD_A);
-  assert(fida == FIELD_A);
-
-  // create two distinct logical regions 
-  LogicalRegion lr1 = runtime->create_logical_region(ctx,is,fs);
-  LogicalRegion lr2 = runtime->create_logical_region(ctx,is,fs);
-
-  // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
-  // when they go out of scope. 
-  runtime->destroy_logical_region(ctx,lr1);
-  runtime->destroy_logical_region(ctx,lr2);
-  runtime->destroy_field_space(ctx,fs);
-  runtime->destroy_index_space(ctx,is);
-\end{lstlisting}
-}
+  \lstinputlisting[linerange={19-38}]{Examples/Regions/logicalregions/logicalregions.cc}}
 \caption{\legionbook{Regions/logicalregions/logicalregions.cc}}
 \label{fig:lr1}
 \end{figure}
@@ -96,22 +74,11 @@ the region by previous tasks that the subtask depends on.  In the
 common case, this means that the results of all previously launched
 tasks that updated the region will be reflected in the instance, but
 the programmer can specify other semantics if desired; see
-Section~\ref{chap:coherence}.
+Chapter~\ref{chap:coherence}.
 
 \begin{figure}
 {\small
-\begin{lstlisting}
-  TaskLauncher init_launcher(INIT_TASK_ID, TaskArgument(NULL,0));
-  init_launcher.add_region_requirement(RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr));
-  init_launcher.add_field(0, FIELD_A);
-  rt->execute_task(ctx, init_launcher);
-
-  TaskLauncher sum_launcher(SUM_TASK_ID, TaskArgument(NULL,0));
-  sum_launcher.add_region_requirement(RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
-  sum_launcher.add_field(0, FIELD_A);
-  rt->execute_task(ctx, sum_launcher);
-\end{lstlisting}
-}
+  \lstinputlisting[linerange={31-39}]{Examples/Regions/physicalregions/physicalregions.cc}}
 \caption{Task launches from \legionbook{Regions/physicalregions/physicalregions.cc.}}
 \label{fig:privileges}
 \end{figure}
@@ -149,7 +116,7 @@ method {\tt add\_region\_requirement}.  A {\tt RegionRequirement} has four compo
   manner inconsistent with the privileges, and most such errors can be
   checked by the Legion runtime with appropriate debugging settings.
   The runtime cannot check
-  that every element is updated when using privilege {\tt
+  that every region element is updated when using privilege {\tt
     WRITE\_DISCARD} and failure to do so may result in incorrect
   behavior.
 
@@ -175,23 +142,8 @@ are numbered from 0 in the order they are added to the launcher) and a single fi
 accessed by the subtask.
 
 \begin{figure}
-{\small
-\begin{lstlisting}
-void sum_task(const Task *task,
-		    const std::vector<PhysicalRegion> &rgns,
-		    Context ctx, Runtime *rt)
-{
-  const FieldAccessor<READ_ONLY,int,1> fa_a(rgns[0], FIELD_A);
-  Rect<1> d = rt->get_index_space_domain(ctx,task->regions[0].region.get_index_space());
-  int sum = 0;
-  for (PointInRectIterator<1> itr(d); itr(); itr++)
-    {
-      sum += fa_a[*itr]; 
-    }
-  printf("The sum of the elements of the region is %d\n",sum);
-}
-\end{lstlisting}
-}
+  {\small
+  \lstinputlisting[linerange={63-75}]{Examples/Regions/physicalregions/physicalregions.cc}}
 \caption{Region accessors from \legionbook{Regions/physicalregions/physicalregions.cc}.}
 \label{fig:accessors}
 \end{figure}
@@ -211,7 +163,7 @@ that shields application code from the details of how physical instances  are re
 the Legion runtime chooses among many different representations depending on the circumstances, so this extra level
 of abstraction avoids having those details exposed and fixed in application code.  There are several different types of
 region accessors provided by Legion.  The {\tt Generic} accessor has 
-extensive debugging but  it is also very slow and should never be used in production code.  
+extensive debugging support and will, for example, detect out of bounds accesses, which is a common programming error.  The {\tt Generic} accessor is also very slow and should never be used in production code.  
 The {\tt FieldAccessor} used in Figure~\ref{fig:accessors} does no checking and is much more performant.
 
 In Figure~\ref{fig:accessors}, the field
@@ -232,14 +184,8 @@ to the one in Figure~\ref{fig:accessors}, except that the initialization task ha
 the runtime that fills every occurrence of {\tt FIELD\_A} with a default value.
 
 \begin{figure}
-{\small
-\begin{lstlisting}
-LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
-
-int init = 1;
-rt->fill_field(ctx,lr,lr,fida,&init,sizeof(init));
-\end{lstlisting}
-}
+  {\small
+  \lstinputlisting[linerange={28-31}]{Examples/Regions/fillfields/fillfields.cc}}
 \caption{\legionbook{Regions/fillfields/fillfields.cc}}
 \label{fig:fill}
 \end{figure}
@@ -291,18 +237,9 @@ instance to become valid before it can be used.
 
 \begin{figure}
 {\small
-\begin{lstlisting}
-  LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
-  InlineLauncher launcher(RegionRequirement(lr, WRITE_DISCARD, EXCLUSIVE, lr).add_field(0,FIELD_A));
-  PhysicalRegion pr = rt->map_region(ctx, launcher);
-  pr.wait_until_valid();
-
-  ... computation omitted, see Examples/Regions/inlinemapping/inlinemapping.cc
-
-  // cleanup
-  rt->unmap_region(ctx, pr);
-\end{lstlisting}
-}
+  \lstinputlisting[linerange={26-29}]{Examples/Regions/inlinemapping/inlinemapping.cc}
+  ... lines omitted ...\\
+  \lstinputlisting[linerange={43-44}]{Examples/Regions/inlinemapping/inlinemapping.cc}}
 \caption{\legionbook{Regions/inlinemapping/inlinemapping.cc}}
 \label{fig:inlinelaunch}
 \end{figure}
