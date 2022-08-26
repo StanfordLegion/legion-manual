@@ -110,20 +110,20 @@ An equal partition is an example of a mathematical partition: an equal partition
 \label{sec:pbf}
 
 Equal partitioning leaves the choice of how to partition the elements of a region
-up to the runtime system, provided that the sizes of subregions are
+up to the runtime system, requiring only that the sizes of subregions are
 equal or nearly equal.  At the other extreme is {\em partition by field}, where
 the application prescribes for each individual element of a region which subregion it should be assigned to.
 
 The program in Figure~\ref{fig:pbf} illustrates partitioning by field.  This example is similar to the previous one,
 but there is now an additional field {\tt FIELD\_PARTITION} that holds a coloring of the elements of the region.
-The {\tt color\_launcher} on lines 23-26 invokes the {\tt color\_task} which assigns a color (a {\tt Point<1>} in this example; colors can be multidimensional points) to each
+The {\tt color\_launcher} on lines 23-26 invokes the {\tt color\_task} which assigns a color (a {\tt Point<1>} in this example; colors can also be multidimensional points) to each
 element of the region.  In this case the assignment is a simple blocking, with each contiguous quarter of the elements assigned the same
 color (lines 46-56; the function uses the number of colors as the divisor, which is 4 in this example), but the coloring could be any assignment of the color space to the elements of the field.  Note also that the
 coloring is dynamically computed; programs can compute a coloring for a field and then partition the region accordingly.
 
 The actual partitioning of the index space occurs on line 28.  The runtime call {\tt create\_partition\_by\_field} takes the current
 context, the region, the parent region (or the same region if it has no parent, as in this case), and the field with the coloring.
-On line 29 the partition of the index space is used to retrieve the logical partition, as in Figure~\ref{fig:equalpart}.
+On line 29 the partition of the index space is used to retrieve the logical partition.
 
 The logic for launching the {\tt sum\_task} over the paritition on lines 31-35 is the same as in Figure~\ref{fig:equalpart}.
 
@@ -139,6 +139,33 @@ The logic for launching the {\tt sum\_task} over the paritition on lines 31-35 i
 \label{sec:pbr}
 
 \begin{figure}
+  \includegraphics[height=1.5in]{figs/pbr.png}
+  \caption{A blocked partition of a 1D region with ghost elements.}
+  \label{fig:1dpbr}
+\end{figure}
+
+Another common partitioning idiom is to divide a region into blocks of the same size, a {\em blocked partitioning}.  For applications involving stencils, it can
+also be useful for the blocks to include ``ghost cells'' adjacent to the block, essentially expanding the block in one or more dimensions.
+Figure~\ref{fig:1dpbr} shows a 1D region partitioned into four subblocks, where each block includes one ghost element on each side.  For
+a 1D region of 100 elements as shown in the figure, the result is four subblocks of size 26, 27, 27, and 26:  the two interior blocks have a ghost element on each side, while the first and last blocks have one ghost element each as the other element would be out of bounds of the region.
+
+Figure~\ref{fig:pbr} gives code for computing the partitioning shown in Figure~\ref{fig:1dpbr}.  The essential differences from previous
+  examples are on lines 21-27.  Starting with the {\tt create\_partition\_by\_restriction} call itself on line 27, we see that in addition to the
+  usual context, index space, and color space this operation also takes a {\em transform} and an {\em extent}.  The extent $E$ is a ``generic''
+  rectangle of the desired size---all subregions in the partition will have the shape of $E$.  The {\tt transform} $T$ is an
+  $n \times m$ matrix, where $n$ is the number of dimensions of the color space and $m$ is the number of dimensions of the region.
+  For a point $p$ in the color space, the points in the corresponding subregion are defined by the rectangle $Tp + E$.  That is $Tp$ defines
+  an offset that is added to $E$ to name the points in the subregion associated with $p$.
+
+  In this example, since the region and color space are both 1D, the transform is a 1x1 matrix, a single integer (lines 21-23); this transform
+  says that subregions will start 25 elements apart (the {\tt blocksize}).  The extent defined on
+  line 26 says that a subregion will extend one element to the left and 25 elements to the right of the 0-point of the subregion, so
+  in general each subregion will have 27 elements.  Legion automatically clips any subregions that extend beyond the bounds of the region
+  being partitioned, so for a color space of $\tt 0, 1, 2, 3$ the corresponding subregions will have elements $\tt 0..25, 24..50, 49..75, 74..99$.
+  Note that unlike the other partitioning operations we have seen so far, the values of the color space are significant and affect the position
+  of the subregion---for a region with an index space 0..99, it is necessary that the color space be $0..3$ and not some other set of four points.
+
+\begin{figure}
   {\small
    \lstinputlisting[linerange={15-49}]{"Examples/Partitions/partition_by_restriction/pbr.cc"}
   }
@@ -150,9 +177,28 @@ The logic for launching the {\tt sum\_task} over the paritition on lines 31-35 i
 \section{Set-Based Partitions}
 \label{sec:set}
 
+Equal partitions, partitions by field and partitions by restriction are all examples of {\em independent} partitions, which are partitions that do
+not depend on other partitions.  Legion also provides a number of {\em dependent} partitioning operators that take partitions as input and
+produce partitions as output.  Dependent partitioning is used heavily in most Legion programs; it is not uncommon to see long chains of
+partitioning operators to name complex subsets of the data that the program needs to manipulate. 
+
+An {\em difference} partition takes two index space partitions and computes their set difference by color: A subspace of the difference partition
+is the set difference of two subspaces, one from each of the two argument partitions, with the same color.  Thus, there is a subspace in the difference
+partition for every color that the two argument partitions have in common.
+
+Figure~\ref{fig:sets} gives an example that creates two partitions by restriction: a ``big'' partition that includes blocks of 26 elements spaced 25 elements apart (lines 22-28, similar to  the partition in Figure~\ref{fig:pbf} but with only one ghost element per subspace) and a ``small'' partition that is a disjoint partition of blocks of 25 elements spaced 25 elements apart (lines 22-24, 26, and 29). The region has 101 elements (line 6) to ensure that every subspace of the big partition actually has 26 elements (i.e., no elements are clipped for being out of bounds).  The difference partition subtracts the small partition from the big partition, so each subspace in the index partition names exactly the ghost element of the corresponding big subspace.  The result of the {\tt sum\_task} shows that there is exactly one element in each subregion of the difference partition.
+
+Legion also provides {\tt create\_partition\_by\_union}, which
+computes the set union of two partitions, and {\tt
+  create\_partition\_by\_intersection}, which computes the set intersection
+of two partitions.  These dependent
+partitioning functions have the same signature as {\tt
+  create\_partition\_by\_difference}.
+
+
 \begin{figure}
   {\small
-   \lstinputlisting[linerange={23-87}]{Examples/Partitions/sets/sets.cc}
+   \lstinputlisting[linerange={21-58}]{Examples/Partitions/sets/sets.cc}
   }
   \caption{\legionbook{Partitions/sets/sets.cc}}
   \label{fig:sets}
