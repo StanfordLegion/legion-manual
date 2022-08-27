@@ -209,6 +209,30 @@ partitioning functions have the same signature as {\tt
 \label{sec:image}
 
 \begin{figure}
+  \centering
+  \includegraphics[height=2in]{figs/image.png}
+  \caption{An image coloring.}
+  \label{fig:eximage}
+\end{figure}
+
+  
+Often we need to partition a region in a way compatible with an already computed partition of another region.
+For example, consider a graph represented by a region of nodes and a region of edges. Assume we have chosen a partition of the nodes $\tt P_N[0],\ldots,P_N[k]$.
+We will often want to partition the edges into subregions $\tt P_E[0],\ldots,P_E[k]$ such that the edges in $\tt P_E[i]$ all have source (or alternatively destination) nodes in $\tt P_N[i]$.  The {\em image} and {\em preimage} partitioning operators discussed in this section and the next provide mechanisms for using a pointer relationship between
+two regions to induce a partitioning of one region given a partitioning of the other.
+
+The example in Figure~\ref{fig:image} creates two regions.  The region {\tt lr\_src} (line 19) has a single field {\tt FIELD\_PTR} of type \verb+Point<1>+ (line 10).  Pointers
+between regions are represented by points in the index space of the pointed-to region, which in this case is {\tt lr\_dst} (line 20).  The {\tt ptr\_task} (defined on lines 47-60 and called on lines 32-36) assigns pointers so that the $i$th element of {\tt lr\_src} points to the $i$th element of {\tt lr\_dst}.
+
+The example creates an equal partition of {\tt lr\_src} on lines 29-30.  The {\tt create\_partition\_by\_image} ``transfers'' the partition of {\tt lr\_src} to the index space {\tt is}: if we think of the pointer field as a function from the source region to the destination index space and visualize the source partition as a coloring of the elements, then each pointer copies the color of its source element to the element of the destination.  An
+example (unrelated to Figure~\ref{fig:image}) of taking the image of a pointer field under a partitioning of the source region is depicted in Figure~\ref{fig:eximage}.  In this abstract example, the coloring of the elements on the region on the left is copied via the pointer field to the elements of the index space or region on the right.  Because an element in the destination may have multiple pointers to it from the source, elements of the destination may have multiple colors, illustratedby the elements with two colors in Figure~\ref{fig:eximage}.  Thus, in general, the partition computed by {\tt create\_partition\_by\_image} may be aliased.  It may also be incomplete, as some elements of the destination region may have no pointers to them at all.  Because the pointer relationship is 1-1 between the source and destination regions
+in the program in Figure~\ref{fig:image}, the partition of the destination in this case is both disjoint and complete.
+
+The {\tt create\_partition\_by\_image} call on line 38 takes the current context, the index space to be partitioned, the source region partition, the source region, the identity of the pointer field in the source region, and the color space of the partition to be computed.  The result is an {\tt IndexPartition} of the destination index space.
+
+The rest of the program (lines 41-45) sums the value field of the destination partition's subregions (which as in other examples has the same value 1 for every element).  Since the 1-1 pointer relationship copies the coloring exactly from source to destination and the source was an equal partition, the sums printed for each subregion are the same.
+
+\begin{figure}
   {\small
     \lstinputlisting[linerange={17-76}]{Examples/Partitions/image/image.cc}
   }
@@ -218,6 +242,28 @@ partitioning functions have the same signature as {\tt
 
 \section{Pre-Image Partitions}
 \label{sec:preimage}
+
+
+\begin{figure}
+  \centering
+  \includegraphics[height=2in]{figs/preimage.png}
+  \caption{An preimage coloring.}
+  \label{fig:expreimage}
+\end{figure}
+
+Where an image partition transfers a partitioning from a pointer's source region to its destination, a pre-image transfers a partitioning of the destination to the source.  Viewing
+the pointer field as a function from source to destination, this operation is a preimage computation of that function.
+
+The program in Figure~\ref{fig:preimage} gives an example.  As before there is a source region and a destination index space.  (Note that the source must be a region because
+we need a pointer field, and only regions have fields.)  The source region has both the pointer field and the value field (lines 8-11), because we will be summing the subregions computed
+by the preimage operation, which are subregions of the source region.  We do not need any fields in the destination region in this simple example, so its field space is empty (line 13).
+
+Line 32 creates an equal partition {\tt ip\_dst} of the index space {\tt is} of the destination region.  The call to {\tt create\_partition\_by\_preimage} on line 35 transfers this partitioning backwards across the pointer field {\tt FIELD\_PTR} to the index space of the source region.  The call takes the current context, the partition of the destination index space, the source region, the source region's parent (or the source region itself if it has no parent, as in this example), the name of the pointer field in the source region, and the color space for the computed partition.
+
+Figure~\ref{fig:expreimage} gives an abstract example of a preimage computation.  Here the pre-existing partition is on the right, and the color of each element is copied backwards through the pointer field to derive a coloring (a partitioning) of the source index space.  Note that because a pointer has a single source, a preimage is always guaranteed to be a disjoint partitioning of the source (but the partition may be incomplete---not every element of the source necessarily has a pointer into the destination).
+
+Returning to the program in Figure~\ref{fig:preimage}, lines 38-43 sum the elements of the value field of each of the subregions of the source.  Again in this example the $i$th element of the source points to the $i$th element of the destination (lines 24-27 and 45-58), so the preimage operation replicates the equal partition of the destination in the source index space.  Since the value field is initialized to 1 (lines 21-22), the sums count the number of elements of each source subregion, which are all equal.
+
 
 \begin{figure}
   {\small
