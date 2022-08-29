@@ -1,1 +1,68 @@
 \chapter{Control Replication}
+\label{chap:cntrlrep}
+
+
+\begin{figure}
+  {\small
+    \lstinputlisting[linerange={15-44,59-74}]{Examples/ControlReplication/sum/cp.cc}
+  }
+  \caption{\legionbook{ControlReplication/sum/cp.cc}}
+  \label{fig:ctrlrep}
+\end{figure}
+
+In Legion and most other tasking models, a root task is responsible for launching subtasks that will fill a parallel machine.  We have already seen that index launches
+(recall Section~\ref{sec:indexlaunch}) can be used to compactly express the launch
+of a set of $n$ tasks, where $n$ is usually scaled with the size of the machine
+being used.
+
+A problem arises when the number of child tasks to be launched by a parent task
+is large: The amount of work the parent task needs to do to launch all of the child tasks
+can itself become a serial bottleneck in the program.  In practice, it turns out that this
+effect does not require especially large numbers of tasks to become noticeable.  For most
+applications, a parent task repeatedly launching more than 16 or 32 tasks at a time has
+a measurable impact on scalability.
+
+{\em Control replication} is Legion's solution to this problem and a key
+feature of the programming model.  Almost any application with tasks
+that launch a large number of subtasks will perform
+significantly better with control replication.  
+
+The idea behind control replication is simple: Instead of having one copy of the
+parent task launching all of the child tasks, multiple copies of the parent
+task are executed in parallel, each of which launches a subset of the child tasks.
+For example, if a parent tasks launches subtasks using index launches,
+then control-replicating the parent tasks $n$ times will result in all copies of the
+parent task launching $1/n$th of the tasks in each index launch (using the default mapper,
+see below).  A common pattern is to replicate a task once per Legion process
+in the computation, with each replicated instance launching the subtasks 
+destined to execute locally on the resources managed by that Legion runtime.
+
+By far the most common case
+is that the top-level task is control-replicated and all other tasks are not,
+but sometimes overall performance can be improved by control replicating other
+tasks in the task hieararchy.  It is also legal to nest control-replicated tasks:
+control-replicated tasks can be launched from within other control-replicated tasks.
+
+At the program level, the use of control replication is straightforward.  Typically,
+the only thing that needs to be done is to notify the system that a task is {\em replicable},
+as shown in Figure~\ref{fig:ctrlrep}, line 36.  In this example, the top-level
+task is marked as replicable, while the {\tt sum} task (not shown) is not.
+As we discuss below, not every task is replicable.  Even if a task $t$ is potentially
+replicable, if it does not launch enough subtasks to make control replication
+worthwhile then it will be better overall not to replicate $t$.
+
+If a task is marked as replicable, then the decisions of whether to
+replicate the task or not and, if the task is replicated, how to {\em
+  shard} the work of analyzing the subtasks across all the instances
+of the replicated task are made by the mapper.  The default mapper
+handles the case of a top-level task that is control-replicated and
+subtasks are sharded evenly and to the instance of the Legion runtime
+where they will execute.  Anything other than this simple, but very
+common, case will likely require writing some custom mapping
+logic.fixed.  Because the dynamic safety checks for control
+replication do not currently cover every way that a task
+might fail to be replicable, it is possible, but unlikely, for a task that is
+incorrectly marked as replicable to pass the safety checks.
+
+
+    

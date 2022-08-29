@@ -8,6 +8,7 @@ INCLUDED_TEX = installation.tex \
 	       partitioning.tex \
 	       mapping.tex \
 	       interop.tex \
+               control_replication.tex \
 	       reference.tex
 INCLUDED_FIGS =  
 

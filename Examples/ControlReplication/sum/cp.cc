@@ -40,12 +40,6 @@ void top_level_task(const Task *task,
   sum_launcher.add_region_requirement(RegionRequirement(lp, 0, READ_ONLY, EXCLUSIVE, lr));
   sum_launcher.region_requirements[0].add_field(FIELD_A);
   rt->execute_index_space(ctx, sum_launcher);
-
-  // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
-  // when they go out of scope.
-  rt->destroy_logical_region(ctx,lr);
-  rt->destroy_field_space(ctx,fs);
-  rt->destroy_index_space(ctx,is);
 }
 
 void sum_task(const Task *task,
