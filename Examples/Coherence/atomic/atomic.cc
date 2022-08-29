@@ -43,13 +43,6 @@ void top_level_task(const Task *task,
   sum_launcher.add_field(0,FIELD_A);
   rt->execute_task(ctx, sum_launcher);
 
-  // Clean up.  IndexAllocators and FieldAllocators automatically have their resources reclaimed
-  // when they go out of scope.
-  rt->destroy_logical_region(ctx,lr);
-  rt->destroy_field_space(ctx,fs);
-  rt->destroy_index_space(ctx,is);
-}
-
 void inc_task(const Task *task,
 		    const std::vector<PhysicalRegion> &rgns,
 		    Context ctx, Runtime *rt)

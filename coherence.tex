@@ -1,11 +1,125 @@
 \chapter{Coherence}
 \label{chap:coherence}
 
+Every task has associated {\em privileges} and {\em coherence modes} for each region argument.  Privileges, which
+declare what a task may do with its region argument (such as reading it, writing it, or performing reductions to it), are discussed in Section~\ref{sec:privileges}.  A coherence mode declares what other tasks may do concurrently
+with a region.  So far we have focused on {\tt Exclusive} coherence, which is the default if no other coherence mode is specified.  Exclusive coherence means that it must
+appear to a task that it has exclusive access to a region argument---all updates from tasks that precede the task in sequential execution order must be included in the region
+when the task starts executing, and no updates from tasks that come after the task in sequential execution order can be visible while the task is running.
+
+More precisely, the coherence mode of region argument $r$ for a task $t$ is a declaration of what updates to $r$ by $t$'s sibling tasks can be visible to $t$.  The scope of a coherence declaration for task $t$ is always the sibling tasks of $t$.  Each region argument may have its own coherence declaration---not all regions
+need have the same coherence mode.
+
+Besides {\tt Exclusive} coherence, there are three other coherence modes: {\tt Atomic}, {\tt Simultaneous}, and {\tt Relaxed}.
+
 \section{Atomic}
 \label{sec:atomic}
 
+\begin{figure}
+  {\small
+    \lstinputlisting[linerange={16-58}]{Examples/Coherence/atomic/atomic.cc}
+  }
+  \caption{\legionbook{Coherence/atomic/atomic.cc}}
+  \label{fig:atomic}
+\end{figure}
+
+An example using {\tt Atomic} coherence is given in Figure~\ref{fig:atomic}.
+The loop on lines 19-24 launches a number of individual {\tt inc} tasks,
+each of which increments all the elements of its region argument by one.
+On line 21, we see the task launcher declares the (single) region argument
+to the {\tt inc} task has {\tt Atomic} coherence.  Atomic coherence means that
+the {\tt inc} task only requires that sibling tasks execute atomically with
+respect to the region {\tt lr}---as far as one {\tt inc} task is concerned,
+it is fine for other tasks $t$ that modify {\tt lr} to appear to execute either before or
+after the {\tt inc} task, provided that {\em all} of $t$'s updates
+to {\tt lr} come either before or after the {\tt inc} task executes.
+Since the loop launches 10 {\tt inc} tasks all with atomic coherence on region {\tt lr},
+these tasks are free to run in any sequential order, but not in parallel (since
+they all write {\tt lr} and must execute atomically).  The {\tt sum} task (lines 26-29)
+is also a sibling task of the {\tt inc} tasks, but the {\tt sum} tasks requires
+exclusive coherence for region {\tt lr}.  Thus, {\tt sum} must run after all of the {\tt inc} tasks have completed and all of their updates have been performed.
+
 \section{Simultaneous}
 \label{sec:simultaneous}
+
+Simultaneous coherence provide the equivalent of shared memory semantics for a region: A task $t$ that requests simultaneous coherence on a region $r$ is permitting
+other tasks to update $r$ and have those updates be visible while $t$ is executing.  By definition simultaneous coherence permits races conditions---the program is in
+fact explicitly requesting that race conditions be permitted. It is up to the program to do whatever additional synchronization is needed to guarantee that the concurrent
+access can only lead to sensible results, as the runtime will not enforce any ordering on the accesses of two or more tasks to the region.
+
+To provide shared-memory semantics, a region for which simultaneous
+coherence is requested by a task can only have one physical instance,
+which is called the {\em copy restrition}.  That is, there can be only
+one copy of the data---no copies can be made---and all tasks using the
+region share it.  As we discuss below, Legion provides a mechanism for
+explicitly relaxing the copy restriction and allowing copies of a
+region to be made, but the default behavior is a single physical
+instance.
+
+\begin{figure}
+  {\small
+\begin{lstlisting}
+DistributeChargeTask::DistributeChargeTask(LogicalPartition lp_pvt_wires,
+                                           LogicalPartition lp_pvt_nodes,
+                                           LogicalPartition lp_shr_nodes,
+                                           LogicalPartition lp_ghost_nodes,
+                                           LogicalRegion lr_all_wires,
+                                           LogicalRegion lr_all_nodes,
+                                           const Domain &launch_domain,
+                                           const ArgumentMap &arg_map)
+ : IndexLauncher(DistributeChargeTask::TASK_ID, launch_domain, TaskArgument(), arg_map,
+                 Predicate::TRUE_PRED, false/*must*/, DistributeChargeTask::MAPPER_ID)
+{
+  RegionRequirement rr_wires(lp_pvt_wires, 0/*identity*/,
+                             READ_ONLY, EXCLUSIVE, lr_all_wires);
+  rr_wires.add_field(FID_IN_PTR);
+  rr_wires.add_field(FID_OUT_PTR);
+  rr_wires.add_field(FID_IN_LOC);
+  rr_wires.add_field(FID_OUT_LOC);
+  rr_wires.add_field(FID_CURRENT);
+  rr_wires.add_field(FID_CURRENT+WIRE_SEGMENTS-1);
+  add_region_requirement(rr_wires);
+
+  RegionRequirement rr_private(lp_pvt_nodes, 0/*identity*/,
+                               READ_WRITE, EXCLUSIVE, lr_all_nodes);
+  rr_private.add_field(FID_CHARGE);
+  add_region_requirement(rr_private);
+
+  RegionRequirement rr_shared(lp_shr_nodes, 0/*identity*/,
+                              REDUCE_ID, SIMULTANEOUS, lr_all_nodes);
+  rr_shared.add_field(FID_CHARGE);
+  add_region_requirement(rr_shared);
+
+  RegionRequirement rr_ghost(lp_ghost_nodes, 0/*identity*/,
+                             REDUCE_ID, SIMULTANEOUS, lr_all_nodes);
+  rr_ghost.add_field(FID_CHARGE);
+  add_region_requirement(rr_ghost);
+}
+\end{lstlisting}
+  }
+  \caption{From Legion/examples/circuit/circuit\_cpu.cc}
+  \label{fig:simul}
+\end{figure}
+
+Figure~\ref{fig:simul} gives a simple example of the use of simultaneous coherence from one of the Legion repository examples.  This excerpt comes from a much larger
+program that simulates the behavior of an arbitrary electrical circuit, modeled as a graph of wires and nodes where where wires connect.   Here we see that the
+{\tt DistributeChargeTask} uses simultaneous coherence on two regions {\tt rr\_shared} and {\tt rr\_ghost}.  The electrical circuit is divided up into pieces
+and the simulation is carried out in parallel for each piece of the circuit.  The regions {\tt rr\_shared} and {\tt rr\_ghost} represent regions that may alias pieces
+of the graph that overlap with other pieces. The {\tt DistributeCharge} task is performing reductions to these two regions (the {\tt REDUCE\_ID} privilege is the identity
+of a reduction operator registered with the runtime system); all the tasks from different pieces may be performing reductions to these aliased regions in parallel.
+Thus, the implementation of the task body of {\tt DistributeCharge} uses atomic operations to guarantee that no reductionupdates are lost (not shown).
+
+In contrast, the region {\tt rr\_private} is a set of nodes private to a particular piece of the graph (not shared with any other piece);
+the task uses exclusive access for this region since no other task will access it.
+
+Because of the copy restriction, this implementation strategy, using simultaneous coherence for multiple tasks that may reduce to the same elements of some regions,
+can only be used for shared-memory CPU-based systems.  Trying to use this code on a distributed machine, or on a machine with GPUs with their own framebuffer memories,
+will result in errors from the runtime system when the program tries to copy restricted regions to other nodes or GPU memory.
+
+
+
+\section{Relaxed}
+\label{sec:relaxed}
 
 
 

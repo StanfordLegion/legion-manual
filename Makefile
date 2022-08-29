@@ -9,6 +9,7 @@ INCLUDED_TEX = installation.tex \
 	       mapping.tex \
 	       interop.tex \
                control_replication.tex \
+               coherence.tex \
 	       reference.tex
 INCLUDED_FIGS =  
 
