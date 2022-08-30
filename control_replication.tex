@@ -10,10 +10,12 @@
   \label{fig:ctrlrep}
 \end{figure}
 
-In Legion and most other tasking models, a root task is responsible for launching subtasks that will fill a parallel machine.  We have already seen that index launches
-(recall Section~\ref{sec:indexlaunch}) can be used to compactly express the launch
-of a set of $n$ tasks, where $n$ is usually scaled with the size of the machine
-being used.
+In Legion and most other tasking models, a root task is responsible
+for launching subtasks that will fill a parallel machine.  We have
+already seen that index launches (recall
+Section~\ref{sec:indexlaunch}) can be used to compactly express the
+launch of a set of $n$ tasks, where $n$ is usually scaled with the
+size of the machine being used.
 
 A problem arises when the number of child tasks to be launched by a parent task
 is large: The amount of work the parent task needs to do to launch all of the child tasks

@@ -42,15 +42,26 @@ exclusive coherence for region {\tt lr}.  Thus, {\tt sum} must run after all of 
 \section{Simultaneous}
 \label{sec:simultaneous}
 
-Simultaneous coherence provide the equivalent of shared memory semantics for a region: A task $t$ that requests simultaneous coherence on a region $r$ is permitting
-other tasks to update $r$ and have those updates be visible while $t$ is executing.  By definition simultaneous coherence permits races conditions---the program is in
-fact explicitly requesting that race conditions be permitted. It is up to the program to do whatever additional synchronization is needed to guarantee that the concurrent
-access can only lead to sensible results, as the runtime will not enforce any ordering on the accesses of two or more tasks to the region.
+Simultaneous coherence provides the equivalent of shared memory semantics for a region: A task $t$ that requests simultaneous coherence on a region $r$ is permitting
+other tasks to update $r$ and have those updates be visible while $t$ is executing.  By definition simultaneous coherence permits race conditions---the program is 
+explicitly requesting that race conditions be permitted on the region. Thus, another way to understand simultaneous coherence is that it notifies the runtime system
+that the application itself will take care of whatever synchronization is needed to guarantee that the tasks accessing the region
+produce correct results, as the runtime will not itself enforce any ordering on the accesses of two or more tasks to the region.
+
+Like all explicit parallel programming, a program that uses simultaneous coherence is more difficult to reason about than a program that does not.  There are legitimate reasons to use simultaneous
+coherence, but they are rare.  We will cover two in this section.  First, we will look at an example where what we truly want is to exploit shared memory.  While this may
+in some circumstances improve performance, requiring shared memory is also less portable.  This example is most likely to be useful when tasks are extremely fine-grain
+and there needs to be concurrency between tasks to fully exploit the hardware. We have not found many such use cases in practice.
+
+The second use case is interoperating with external programs or other resources, where simultaneous coherence is the only safe model of data shared with an external process.
+Because this case is common and important, Legion encapsulates the most useful` interoperation patterns in higher level constructs described in Chapter~\ref{chap:interop} and we strongly
+recommend using those abstractions if possible.
+These higher level abstractions are built on simultaneous coherence and the other concepts introduced in this section.
 
 To provide shared-memory semantics, a region for which simultaneous
 coherence is requested by a task can only have one physical instance,
-which is called the {\em copy restrition}.  That is, there can be only
-one copy of the data---no copies can be made---and all tasks using the
+which is called the {\em copy restriction}.  That is, there can be only
+one instance of the data---no copies can be made---and all tasks using the
 region share it.  As we discuss below, Legion provides a mechanism for
 explicitly relaxing the copy restriction and allowing copies of a
 region to be made, but the default behavior is a single physical
@@ -101,13 +112,13 @@ DistributeChargeTask::DistributeChargeTask(LogicalPartition lp_pvt_wires,
   \label{fig:simul}
 \end{figure}
 
-Figure~\ref{fig:simul} gives a simple example of the use of simultaneous coherence from one of the Legion repository examples.  This excerpt comes from a much larger
+Figure~\ref{fig:simul} gives a simple example of the use of simultaneous coherence from the Legion repository that is intended specifically to exploit shared memory.  This excerpt comes from a much larger
 program that simulates the behavior of an arbitrary electrical circuit, modeled as a graph of wires and nodes where where wires connect.   Here we see that the
 {\tt DistributeChargeTask} uses simultaneous coherence on two regions {\tt rr\_shared} and {\tt rr\_ghost}.  The electrical circuit is divided up into pieces
 and the simulation is carried out in parallel for each piece of the circuit.  The regions {\tt rr\_shared} and {\tt rr\_ghost} represent regions that may alias pieces
 of the graph that overlap with other pieces. The {\tt DistributeCharge} task is performing reductions to these two regions (the {\tt REDUCE\_ID} privilege is the identity
 of a reduction operator registered with the runtime system); all the tasks from different pieces may be performing reductions to these aliased regions in parallel.
-Thus, the implementation of the task body of {\tt DistributeCharge} uses atomic operations to guarantee that no reductionupdates are lost (not shown).
+Thus, the implementation of the task body of {\tt DistributeCharge} uses atomic updates to guarantee that no reductions are lost (not shown).
 
 In contrast, the region {\tt rr\_private} is a set of nodes private to a particular piece of the graph (not shared with any other piece);
 the task uses exclusive access for this region since no other task will access it.
@@ -116,10 +127,60 @@ Because of the copy restriction, this implementation strategy, using simultaneou
 can only be used for shared-memory CPU-based systems.  Trying to use this code on a distributed machine, or on a machine with GPUs with their own framebuffer memories,
 will result in errors from the runtime system when the program tries to copy restricted regions to other nodes or GPU memory.
 
+Another use of simultaneous coherence is shown in Figure~\ref{fig:sim}.  In this example there are two tasks, a producer and a consumer, that alternate
+access to a region that has simultaneous coherence.  A producer task fills a region with some values (for illustration the $i$th time the producer is called it writes $i$ to
+every element of the region), and a consumer task reads the values written by the previous producer and resets the values to 0.  Because the region has simultaneous coherence, it is necessary for
+the producer and consumer tasks to synchronize: a consumer task should wait until the region is filled by a producer task, and a producer task should wait until the previous consumer task has emptied
+the region.
 
+{\em Phase barriers} are a lightweight synchronization abstraction designed for deferred execution.  The name ``barrier'' is not meant to evoke MPI barriers, and attempting
+to understand phase barriers in terms of MPI barriers will lead to confusion.  A phase barrier has three important characteristics:
+\begin{itemize}
+\item An operation can {\em wait} on a phase barrier; the waiting operation will not begin execution until the phase barrier is triggered.
+\item An operation can {\em arrive} at a phase barrier.  Every phase barrier has an {\em arrival count}, which is the number of arrivers required to trigger the barrier.  Once triggered, all of the waiters (and any future waiters on the same barrier) are notified.  By default,
+  the arrival count of a phase barrier is 1.
+\item A phase barrier has a {\em generation}.  When an operation waits on or arrives at a barrier, it waits on or arrives at a specific generation.  A phase barrier can be {\em advanced} to a new generation, and different operations can wait on or arrive at that
+  generation.  Generations support deferred execution, as illustrated below.  A phase barrier has $2^{32}$ generations---so a very large, but not unlimited, number.
+\end{itemize}
+
+\begin{figure}
+  \centering
+  \lstinputlisting[linerange={16-76}]{Examples/Coherence/simultaneous/sim.cc}
+  \caption{\legionbook{Coherene/simultaneous/sim.cc}}
+  \label{fig:sim}
+\end{figure}
+
+The final concepts we need to explain idiomatic use of simultaneous coherence in Legion are {\em acquire} and {\em release} of regions.  Acquiring a region with simultaneous coherence tells the runtime system that it is safe to make copies of the region's sole physical instance: an acquire means that the task is promising it will be the only user of the data until the region is released.  It is up to the application to use acquire and release correctly; there is no checking done by the runtime system.  An acquire removes the copy restriction on a region, which allows
+an instance of the region, and therefore the task itself, to be mapped anywhere in the system---for example on a different node or onto an accelerator such as a GPU.
+A release copies all updates to the region back to the original physical instance (i.e., if flushes all the updates) and restores the copy restriction.  In a typical use of simultaneous coherence, phase barriers are used to ensure that the acquires and releases of the region
+are properly synchronized.
+
+In Figure~\ref{fig:sim}, the structure of the loop from lines 21-61 is alternating producer and consumer tasks.  There are two phase barriers, called {\tt even} and {\tt odd} (lines 1-2).  The odd barrier is used by a producer task to wait for the preceding consumer task to finish.  The even barrier is used by a consumer task to wait for the preceding producer
+to finish.
+
+At the top of the loop the phase barriers are advanced to the next generation, which will be used by the tasks in the current iteration of the loop (lines 22-23).  Executing the producer task consists of three phases:
+first an {\em acquire launcher} is used and then executed to acquire coherence on the region {\tt lr}.  An acquire launcher acquires a set of fields of a region and can optionally wait on or arrive at phase barriers; in this case the launcher waits on the current generation of the {\tt odd}
+phase barrier except in the first iteration of the loop (lines 26-30).  We then construct a task launcher and execute the producer task (lines 32-35).  Finally, a release launcher is constructed that releases coherence on {\tt lr} and arrives at the current generation of the
+{\tt even} phase barrier (lines 37-40).
+
+The three phases for the consumer task (acquiring coherence on {\tt lr}, executing the consumer task, and releasing coherence on {\tt lr}) are similar, with the roles of the {\tt odd} and {\tt even} phase barriers reversed (lines 43-57).
+
+When this program is executed, note that the ten iterations of the main loop likely complete before any of the operations in the loop body execute (examine the order of {\tt printf}'s from the top-level loop and the producer and consumer tasks).  Thus, the entire chain of dependencies between the different producers, consumers, acquires, and releases may be constructed before any of that work is done.  Allowing the runtime to defer large amounts of work depends on having unique names for the synchronization operations used in different iterations of the loop
+with different tasks, which is the purpose of the generation property of phase barriers.
+
+Finally, note that if we simply replaced simultaneous coherence by exclusive coherence the example could be dramatically simplified to just the two task launches in the loop body, removing all operations to acquire and release and operate on phase barriers.  In a self-contained
+Legion program there is little reason to add the extra complexity of simultaneous coherence.  However, if one of the producer or consumer tasks were external to the program, controlled by another process, then simultaneous coherence is needed to express the interaction with the
+data shared between Legion and the external process.
 
 \section{Relaxed}
 \label{sec:relaxed}
 
+The design of Legion includes one other coherencd mode, {\tt Relaxed}.
+Relaxed coherence tells the runtime system that the application will
+handle all aspects of the correct use of data---there is no checking
+of any kind and all runtime support is disabled, allowing the
+application to do whatever it wants with the data, at the cost of the
+application being entirely responsible for the coherence of the data.
+We discourage the use of relaxed coherence in application code.
 
 
