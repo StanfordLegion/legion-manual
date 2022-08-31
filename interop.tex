@@ -1,13 +1,138 @@
 \chapter{Interoperation}
 \label{chap:interop}
 
+In this chapter we briefly discuss the most common scenarios where Legion programs need to interoperate with other systems.  We will rely in this chapter on examples from the {\tt legion/examples} directory in the Legion repository.
+
 \section{MPI}
+\label{sec:mpi}
+
+Legion has well-developed support for interoperation with MPI.  The essentials of the approach are:
+\begin{itemize}
+\item The top-level Legion task is control-replicated, with a number of shards equal to the number of ranks of MPI.
+\item Legion and MPI time-slice the machine:  One of MPI or Legion is running at any given time, while the other runtime
+  waits.
+\item Data can be shared between MPI and Legion by attaching an MPI buffer as a region with simultaneous coherence (with the correct layout constraint
+  to ensure the buffer contents are interpreted correctly by Legion).  The data can be moved back and forth between a shard of the top-level
+  task and the corresponding MPI rank using the producer-consumer synchronization discussed in Section~\ref{sec:simultaneous}.
+\end{itemize}
+
+MPI interoperation is illustrated in {\tt legion/examples/mpi\_with\_ctrl\_repl/mpi\_with\_ctrl\_repl.cc}:
+  \begin{lstlisting}
+    MPILegionHandshake handshake;
+    ...
+    // This is the preferred way of using handshakes in Legion                                                                                                                                                                                                                               
+    IndexLauncher worker_launcher(WORKER_TASK_ID, launch_bounds, TaskArgument(NULL, 0), args_map);
+    // We can use our handshake as a phase barrier                                                                                                                                                                                                                                          
+    // Record that we will wait on this handshake    
+    worker_launcher.add_wait_handshake(handshake);
+    // Advance the handshake to the next version
+    handshake.advance_legion_handshake();
+    // Then record that we will arrive on this version
+    worker_launcher.add_arrival_handshake(handshake);
+    // Launch our worker task
+    // No need to wait for anything
+    runtime->execute_index_space(ctx, worker_launcher);
+  \end{lstlisting}
+In this excerpt, we see that the synchronization between MPI and Legion is wrapped in a {\tt MPILegionHandshake} object (line 1).  The handshake encapsulates a phase barrier and is used similarly (see Section~\ref{sec:simultaneous}), but a handshake also knows how to work with MPI.
+An index task launcher is built to run the Legion-side work (line 4) and its execution is deferred until the MPI side signals it is done running (line 7).  Just like a phase barrier, handshakes have generations so that they can be reused multiple times, typically across
+iterations of a loop.  The handshake is advanced to the next generation (line 9) and when the index tasks are finished the (new generation of the) handshake is signaled to restart the MPI side (line 11).
+
+The MPI side of the interface is symmetric.  From the same example:
+\begin{lstlisting}
+  for (int i = 0; i < total_iterations; i++)
+  {
+    printf("MPI Doing Work on rank %d\n", rank); // MPI work goes here
+    if (strict_bulk_synchronous_execution)
+       MPI_Barrier(MPI_COMM_WORLD);
+    // Perform a handoff to Legion, this call is 
+    // asynchronous and will return immediately
+    handshake.mpi_handoff_to_legion();
+    ..
+    // Wait for Legion to hand control back,
+    // This call will block until a Legion task
+    // running in this same process hands control back
+    handshake.mpi_wait_on_legion();
+    if (strict_bulk_synchronous_execution)
+      MPI_Barrier(MPI_COMM_WORLD);
+  }
+\end{lstlisting}
+MPI uses the same handshake object as Legion.  Note that the
+call to {\tt mpi\_wait\_on\_legion} blocks until Legion arrives at the handshake; the other arrive/wait handshake methods are asynchronous.
+Because the MPI side blocks while it is waiting on Legion, it is not concerned with the generation of the handshake, so the generation should only be
+advanced by the Legion side to allow for deferred execution of Legion tasks.
+
 
 \section{OpenMP}
+\label{sec:openmp}
+
+Legion provides a straightfoward model of interoperation with OpenMP.  Legion tasks may use OpenMP pragmas internally to exploit
+multiple threads in a single kernel.  Legion tasks that use OpenMP should be mapped to OMP processors, which can be enforced by
+adding an OMP  constraint when the task is registered.
+
+Under the hood Legion interoperates with OpenMP by directly implementing OpenMP functionality.  Only a subset of OpenMP is supported,
+but the support extends to the most commonly used features, particularly {\tt omp parallel for}.
+
+The program {\tt legion/omp\_saxpy} illustrates typical uses of OpenMP in Legion programs.  In this code, the leaf tasks (the tasks
+that do not call other tasks) include OpenMP pragmas.  For example, in {\tt simple\_blas.cc} a dot product operation is defined:
+\begin{lstlisting}
+template <>
+float BlasTaskImplementations<float>::dot_task_cpu(const Task *task,
+						   const std::vector<PhysicalRegion> &regions,
+						   Context ctx, Runtime *runtime)
+{
+  IndexSpace is = regions[1].get_logical_region().get_index_space();
+  Rect<1> bounds = runtime->get_index_space_domain(ctx, is);
+
+  const FieldAccessor<READ_ONLY,float,1,coord_t,
+          Realm::AffineAccessor<float,1,coord_t> > fa_x(regions[0], task->regions[0].instance_fields[0]);
+  const FieldAccessor<READ_ONLY,float,1,coord_t,
+          Realm::AffineAccessor<float,1,coord_t> > fa_y(regions[1], task->regions[0].instance_fields[0]);
+
+  float acc = 0;
+#\##pragma omp parallel for reduction(+:acc) if(blas_do_parallel)
+  for(int i = bounds.lo[0]; i <= bounds.hi[0]; i++)
+    acc += fa_x[i] * fa_y[i];
+  return acc;
+}
+\end{lstlisting}
+Note that unlike most other examples in this manual, this code uses an {\tt AffineAccessor} for the fields.  Affine accessors support indexing into regions like arrays, which is necessary in this example because the different
+iterations of the loop will be split across multiple OpenMP threads---we cannot use an iterator here, as an iterator by definition defines a sequential order of access to the elements iterated over.  The {\tt axpy} task in the same file gives another example of using
+OpenMP pragmas within Legion tasks.
+
+The code for registering the tasks that use OpenMP is in {\tt simple\_blas.inl}:
+\begin{lstlisting}
+  {
+    dot_task_id = Runtime::generate_static_task_id();
+    TaskVariantRegistrar tvr(dot_task_id);
+#\##ifdef REALM_USE_OPENMP
+    tvr.add_constraint(ProcessorConstraint(Processor::OMP_PROC));
+#\##else
+    tvr.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+#\##endif
+    Runtime::preregister_task_variant<T, BlasTaskImplementations<T>::dot_task_cpu>(tvr, "dot (cpu)");
+  }
+\end{lstlisting}
+This code is parameterized on whether OpenMP is to be used or not; if it is used the processor constraint for the task is set to {\tt OMP\_PROC}, otherwise it is set to {\tt LOC\_PROC} (i.e., CPUs).
+
+There are a few command-line flags that affect the execution of Legion programs using OpenMP:
+\begin{itemize}
+
+\item {\tt -ll:ocpus n} sets the number of CPUs to be reserved for OpenMP to $n$.
+\item {\tt -ll:othr t} sets the njmber of threads per CPU to $t$.
+\item {\tt -ll:okindhack} exposes the master OpenMP thread as a CPU processor. This flag is useful when running with {\tt -ll:cpus 0} to give an extra processor to the OpenMP runtime; if there are some remaining CPU tasks they can be sent to the
+    procesor running the master OpenMP thread using {\tt -ll:okindhack}.
+\item {\tt -ll:onuma} ensures that OpenMP cores are grouped by NUMA domain; a warning is printed if NUMA support is not found.
+\item {\tt -ll:ostack m} sets the OpenMP stack size to $m$ bytes.
+\end{itemize}
+
+Finally, Legion is not compiled with OpenMP by default.  To enable OpenMP, build Legion with {\tt USE\_OPENMP = 1}.
+  
 
 \section{HDF5}
+\label{sechdf5}
 
 \section{Kokkos}
+\label{sec:kokkos}
 
 \section{Python}
-
+\label{sec:python}
