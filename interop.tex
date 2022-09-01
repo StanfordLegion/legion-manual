@@ -131,6 +131,46 @@ Finally, Legion is not compiled with OpenMP by default.  To enable OpenMP, build
 \section{HDF5}
 \label{sechdf5}
 
+HDF5 is a standard file format for storing very large files.  HDF5 is hierarchical: files can be made of {\em groups}, which can
+be nested, with data sets stored at the leaves of the group structure.  HDF5's hierarchical files map well on to Legion's
+regions and subregions.
+
+Legion provides support for reading and writing HDF5 files using logical regions. We have already seen all of the mechanisms in 
+Section~\ref{sec:simultaneous}: HDF5 files are treated as external resources that are attached to a region with simultaneous coherence.  After acquiring
+the region (to release the copy restriction) copies can be made of the data; when the coherence is released any updates are
+flushed back to the original region instance.
+
+A simple example of creating and writing checkpoints using an HDF5 file is {\tt legion/examples/attach\_file}.  Most
+of the calls that manipulate HDF5 files in this program are actually direct calls to the HDF5 library, such as calls to
+{\tt H5Fcreate}, {\tt H5Gcreate2}, {\tt H5Gclose}, {\tt H5Sclose}, and {\tt H5Fclose} in {\tt generate\_hdf\_file}.  See the
+HDF5 documentation for the semantics of these calls.
+
+The place where the API intersects with HDF5 is in the use of an attach launcher to bind a region to an HDF5 file.
+The relevant excerpt from this example:
+\begin{lstlisting}
+#\##ifdef LEGION_USE_HDF5
+  if(*hdf5_file_name) {
+    // create the HDF5 file first - attach wants it to already exist
+    bool ok = generate_hdf_file(hdf5_file_name, hdf5_dataset_name, num_elements);
+    assert(ok);
+    std::map<FieldID,const char*> field_map;
+    field_map[FID_CP] = hdf5_dataset_name;
+    printf("Checkpointing data to HDF5 file '%s' (dataset='%s')\n",
+	   hdf5_file_name, hdf5_dataset_name);
+    AttachLauncher al(LEGION_EXTERNAL_HDF5_FILE, cp_lr, cp_lr);
+    al.attach_hdf5(hdf5_file_name, field_map, LEGION_FILE_READ_WRITE);
+    cp_pr = runtime->attach_external_resource(ctx, al);
+  } else
+#\##endif
+\end{lstlisting}
+The only differences in this code from the discussion of attach
+launchers in Section~\ref{sec:simultaneous} are
+the constant {\tt LEGION\_EXTERNAL\_HDF5\_FILE} for the external resource argument of the constructor on line 10 and the use of the
+{\tt attach\_hdf5} method with the access mode {\tt  LEGION\_FILE\_READ\_WRITE} on line 11.
+
+HDF5 is not included in the Legion build by default.  Set {\tt USE\_HDF5=1} to build with HDF5 supoort.
+The variable {\tt HDF\_ROOT} can be set to the root directory of the HDF library if needed.
+
 \section{Kokkos}
 \label{sec:kokkos}
 
