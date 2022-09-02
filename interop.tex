@@ -174,5 +174,114 @@ The variable {\tt HDF\_ROOT} can be set to the root directory of the HDF library
 \section{Kokkos}
 \label{sec:kokkos}
 
+Legion supports running Kokkos tasks as part of a Legion execution.  An example program is in the directory
+{\tt legion/examples/kokkos\_saxpy}.  From the Legion point of view, Kokkos is most useful as a processor-agnostic
+portability layer for kernels, allowing the same kernel to target both GPUs and CPUs, for example.
+In Kokkos, the parameterization over the processor kind is handled by C++ templates over {\em execution spaces}.
+Instantiating the execution space with different arguments allows Kokkos to generate code for GPUs, GPUs, and OpenMP.
+
+The need to parameterize Kokkos tasks on the execution space, combined some limitations of C++ templates,
+causes the implementation of Kokkos tasks in Legion to look quite different from other task implementations
+we have seen.  For example, the initialization task in {\tt kokkos\_saxpy} is:
+
+\begin{lstlisting}
+template <typename execution_space>
+class InitTask {
+public:
+  static void task_body(const Task *task,
+			const std::vector<PhysicalRegion> &regions,
+			Context ctx, Runtime *runtime)
+  {
+    printf("kokkos(%s) init task on processor " IDFMT ", kind %d\n",
+           typeid(execution_space).name(),
+           runtime->get_executing_processor(ctx).id,
+           runtime->get_executing_processor(ctx).kind());
+
+    const float offset = *reinterpret_cast<const float *>(task->args);
+
+    Rect<1> subspace = runtime->get_index_space_domain(ctx,
+						       task->regions[0].region.get_index_space());
+
+    AccessorRW acc(regions[0], task->regions[0].instance_fields[0]);
+
+    // you can use relative indexing for your own kernels too - just make
+    //  sure you do the right thing when operating on a partitioned
+    //  subregion!
+    Kokkos::View<float *,
+		 Kokkos::LayoutStride,
+		 typename execution_space::memory_space> view = acc.accessor;
+
+    size_t n_elements = subspace.hi.x - subspace.lo.x + 1;
+    Kokkos::RangePolicy<execution_space> range(runtime->get_executing_processor(ctx).kokkos_work_space(),
+					       0, n_elements);
+    Kokkos::parallel_for(range,
+			 KOKKOS_LAMBDA (int i) {
+			   // using a relative address, but value to store
+			   //  is based on global index
+			   // have to use a relative address!
+			   view(i) = (i + subspace.lo.x) + offset;
+			 });
+  }
+};
+\end{lstlisting}
+
+A Kokkos task is implemented as a C++ class with a method {\tt task\_body} that has the code for the task (and has the standard Legion signature for a task).  The class
+definition is wrapped in a template with an execution space parameter.
+
+Another point where Legion and Kokkos interact is in the mapping of Legion's region accessors into Kokkos views---for code generation in Kokkos to work well, it is important
+that Kokkos views be used to access data, though these views can often be Legion accessors cast to a suitable Kokkos type (e.g., lines 21-25 above).
+
+Finally, because Kokkos tasks are templated classes, registering a Kokkos task requires additional logic to instantiate the template with the kind of processor to be used and then registering the
+{\tt task\_body} function of the resulting class.  In {\tt kokkos\_saxpy}, this logic is encapsulated in the function {\tt preregister\_kokkos\_task}:
+\begin{lstlisting}
+template <template<typename> class PORTABLE_KOKKOS_TASK>
+void preregister_kokkos_task(TaskID task_id, const char *name)
+{
+  // register a serial version on the CPU
+  {
+    TaskVariantRegistrar registrar(task_id, name);
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<
+      PORTABLE_KOKKOS_TASK<Kokkos::Serial>::task_body >(registrar, name);
+  }
+  ...
+}
+...
+preregister_kokkos_task<InitTask>(INIT_TASK_ID, "init");  
+\end{lstlisting}
+Note that {\tt pregister\_kokkos\_task} is templated on the class representing the task to be registered.
+
+Enable {\tt USE\_Kokkos=1} to build with Kokkos support, which is not included in Legion by default.
+The compile-time flags {\tt KOKKOS\_ENABLE\_CUDA}, {\tt KOKKOS\_ENABLE\_OPENMP} and {\tt KOKKOS\_ENABLE\_SERIAL} enables
+generation of kernels for GPUs, OpenMP, and CPUs, respectively.
+
 \section{Python}
 \label{sec:python}
+
+Legion provides extensive interoperation support with Python through Pygion, which implements the Legion programming model
+in Python.  Pygion is essentially untyped Regent with Python syntax.  All of the Legion programming features are available
+through Pygion.
+
+One of the additional features that Pygion provides is the ability to define a Legion task in Python.  This task, when run,
+will execute in a Python interpreter.  Given the overheads of Python, tasks written in Python (as opposed to task simply
+called from Python) will generally be slow compared to the same task written in C++ or CUDA, but for small amounts of compute
+the convenience of having all of the Python facilities available outweighs what should be a negligible performance penalty.
+
+Python tasks run on dedicated Python processors, for which Legion reserves a core to run
+the Python interpreter.
+
+There are numerous example so Pygion code illustrating the use of all of the Legion features in
+{\tt legion/bindings/python/examples}.  As an example, a simple ``hello, world'' program is in
+{\tt legion/bindings/python/examples/hello.py}:
+\begin{lstlisting}
+  from pygion import task
+
+@task
+def main():
+    print("Hello, Legion!")
+
+if __name__ == '__main__':
+    main()
+\end{lstlisting}
+More infomation on Pygion can be found in \cite{pygion19}.
+
