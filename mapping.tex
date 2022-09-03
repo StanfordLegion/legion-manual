@@ -2,20 +2,22 @@
 \label{chap:mapping}
 The Legion mapper interface is a key part
 of the Legion programming system. Through the mapping interface applications
-can control almost all decisions that can impact application performance.
-The Legion philosophy is that these choices are better left to applications
-rather than having heuristics in Legion that attempt to ``do the right thing'' in
-every conceivable circumstance.  As a result, the very few performance heuristics
+can control most decisions that can impact application performance.
+The philosophy is that these choices are better left to applications
+rather than using hard-wired heuristics in Legion that attempt to ``do the right thing'' in
+every situation.  The few performance heuristics
 that are included in Legion are associated with low levels of the system
 where there is no good way to expose those choices to the application.
-For everything else the application must decide on the policy to use.
+For everything else the policies can be set by the application.
 
-This design was chosen because of our own past experience with systems
-where system heuristics did not behave as we desired, and we had no recourse
-because those heuristics were not programmable by users.
-Legion exposes these decisions so that expert programmers can achieve exactly
-the effects they want, but it is also important to understand that squeezing every last bit of performance from a system may require understanding
-and setting a wide variety of parameters exposed in the mapping interface.
+This design resulted from our own past experience with systems
+where built-in heuristics did not behave as we desired and there was no recourse
+to override those decisions.  While this approach does not give experts the
+option to tune runtime policies, it is very convenient for casual users
+who don't need to learn how to set those policies. While Legion does allow
+users to squeeze every last bit of performance from a system, it is important
+to realize that doing so potentially requires understanding and setting a wide
+variety of parameters exposed in the mapping interface.
 This level of control can be overwheling at first to users who are not used to
 considering all the possible dimensions that influence performance in complex,
 distributed, and heterogeneous systems.
@@ -25,25 +27,31 @@ to concern themselves with tuning the performance knobs exposed by the mapper
 interface, Legion provides a {\em default mapper}.  The default mapper
 implements the Legion mapper API (like any other mapper) and provides a number
 of heuristics that can provide reasonably performant, or at least correct, initial
-settings.  However, it is unreasonable to expect the default mapper to provide excellent performance, and in
+settings.  A good way to think about the default mapper is that it is the version
+of Legion with built-in heuristics that allows casual users to write Legion
+applications or allows experts to start quickly on a new application.
+As such, it is unreasonable to expect the default mapper to provide excellent performance, and in
 particular assuming that the performance of an application using the default
-mapper is even an approximate indication of the performance that could be
+mapper is even an approximation of the performance that could be
 achieved with a custom mapper is a mistake.
 
 
 We will use several examples from the default mapper
 to illustrate how mappers are constructed. We will also describe where
-possible the heuristics that the default mapper employs to get 
+possible the heuristics that the default mapper employs to achieve
 reasonable performance. Because the default mapper uses generic heuristics
 with no specific knowledge of the apllication, it is almost certain to make
 poor decisions at least some of the time.
 Performance benchmarking using only the default mapper is strongly
 discouraged, while using custom application-specific mappers is
-encouraged.  It is likely that the moment when you are dissatisfied with the 
+encouraged.
+
+It is likely that the moment when you are dissatisfied with the 
 heuristics in the default mapper will come sooner rather than later.
 At that point the information in this chapter will be necessary for you
-to write your own custom mapper, which might be as simple as
-overriding a few features of the default mapper.
+to write your own custom mapper.  In practice, our experience has been that in
+many cases all that is necessary is to replace a small number of policies in the
+default mapper that are a poor fit for the application.
 
 \section{Mapper Organization}
 \label{sec:mapping:org}
@@ -345,6 +353,14 @@ int main(int argc, char **argv)
 \section{Mapping Tasks}
 \label{sec:mapping:tasks}
 
+\subsection{Overview of the Task Mapping Pipeline}
+select\_task\_options (once per task launch)
+select\_tasks\_to\_map (until task gets added to list)
+select\_sharding\_functor (once per task launch, if replicated execution)
+slice\_task (if index launch, can recurse, includes only local points if replicated execution)
+map\_task
+select\_task\_sources (for each region requirement, to decide where to pull the data from, if more than one option)
+
 \subsection{Task Placement}
 \label{subsec:mapping:placement}
 
@@ -390,4 +406,13 @@ int main(int argc, char **argv)
 
 \subsection{Controlling Stealing}
 \label{subsec:mapping:stealing}
+
+\section{Mappers Included with Legion}
+
+Default mapper
+
+Logging mapper
+
+Null mapper
+
 
