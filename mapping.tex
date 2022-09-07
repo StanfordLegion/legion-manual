@@ -621,6 +621,17 @@ virtual void permit_steal_request(const MapperContext ctx,
 %\subsection{Mapper Communication}
 %\label{subsec:mapping:communication}
 
+\section{Performance: Tracing}
+
+
+type TraceID
+\begin{lstlisting}
+for(...) {
+  runtime->begin_trace(ctx, TRACE_ID);
+  ...
+  runtime->end_trace(ctx, TRACE_ID);
+}
+\end{lstlisting}
 
 \section{Mappers Included with Legion}
 
