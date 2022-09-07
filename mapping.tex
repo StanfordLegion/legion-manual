@@ -2,25 +2,23 @@
 \label{chap:mapping}
 The Legion mapper interface is a key part
 of the Legion programming system. Through the mapping interface applications
-can control most decisions that can impact application performance.
+can control most decisions that impact application performance.
 The philosophy is that these choices are better left to applications
 rather than using hard-wired heuristics in Legion that attempt to ``do the right thing'' in
 every situation.  The few performance heuristics
 that are included in Legion are associated with low levels of the system
 where there is no good way to expose those choices to the application.
-For everything else the policies can be set by the application.
+For everything else applications can set the policies.
 
 This design resulted from our own past experience with systems
-where built-in heuristics did not behave as we desired and there was no recourse
-to override those decisions.  While this approach does not give experts the
-option to tune runtime policies, it is very convenient for casual users
-who don't need to learn how to set those policies. While Legion does allow
-users to squeeze every last bit of performance from a system, it is important
+where built-in performance heuristics did not behave as we desired and there was no recourse
+to override those decisions.  While Legion does allows
+experts to squeeze every last bit of performance from a system, it is important
 to realize that doing so potentially requires understanding and setting a wide
 variety of parameters exposed in the mapping interface.
 This level of control can be overwheling at first to users who are not used to
 considering all the possible dimensions that influence performance in complex,
-distributed, and heterogeneous systems.
+distributed and heterogeneous systems.
 
 To help users write initial versions of their applications without needing
 to concern themselves with tuning the performance knobs exposed by the mapper
@@ -29,8 +27,8 @@ implements the Legion mapper API (like any other mapper) and provides a number
 of heuristics that can provide reasonably performant, or at least correct, initial
 settings.  A good way to think about the default mapper is that it is the version
 of Legion with built-in heuristics that allows casual users to write Legion
-applications or allows experts to start quickly on a new application.
-As such, it is unreasonable to expect the default mapper to provide excellent performance, and in
+applications and allows experts to start quickly on a new application.
+It is, however, unreasonable to expect the default mapper to provide excellent performance, and in
 particular assuming that the performance of an application using the default
 mapper is even an approximation of the performance that could be
 achieved with a custom mapper is a mistake.
@@ -57,87 +55,40 @@ default mapper that are a poor fit for the application.
 \label{sec:mapping:org}
 
 The Legion mapper interface is an abstract C++ class that defines a set of 
-pure virtual functions that the Legion runtime invokes as callbacks
-for making performance-related decisions. A Legion mapper is therefore 
-simply a class that inherits from the base abstract class and provides 
+pure virtual functions that the Legion runtime invokes as {\em callbacks}
+for making performance-related decisions. A Legion mapper is 
+a class that inherits from the base abstract class and provides 
 implementations of the associated pure virtual methods.
+
+A callback is just a function pointer---when the runtime system calls a mapper
+function, it is said to have ``invoked the callback''.  Callbacks are a commomly-used
+mechanism in software systems for parameterizing some specific functionality; in our case
+mappers parameterize the performance heuristics of the Legion runtime system.
+There are a few general things to keep in mind about mappers and callbacks:
+\begin{itemize}
+\item The runtime may invoke callbacks in an unpredictable order.  While multiple callbacks associated with a
+  single instance of a Legion object, such as a task, will happen in a specific order for that task,
+  other callbacks for other operations may be interleaved.
+\item Depending on the synchronization model selected (see Section~\ref{subsec:mapping:sync}), mappers
+  may have a degree of concurrency between mapper callbacks.
+\item Since mappers are C++ objects, they can have arbitrary internal state.  For example, it may be useful
+  to maintain performance or load-balancing statistics that inform mapping decisions.
+  However, state updates done by a mapper must take into account the unpredictable order in
+  which callbacks are invoked as well any issues of concurrent access to mapper data structures.
+\end{itemize}
 
 \subsection{Mapper Registration}
 \label{subsec:mapping:registration}
 
-After the Legion runtime is created, but before the application itself
-begins, the application is given the opportunity to register mapper objects 
+After the Legion runtime is created, but before the application 
+begins, mapper objects can be registered 
 with the runtime. Figure~\ref{fig:mapper_registration} gives a small
-example demonstrating how to register a custom mapper.
+example registering a custom mapper.
 
 \begin{figure}
-\begin{lstlisting}
-void top_level_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, 
-		    Runtime *runtime)
-{
-  printf("Running top level task...\n");
-}
-
-class CustomMapperA : public DefaultMapper {
-public:
-  CustomMapperA(MapperRuntime *rt, Machine m, Processor p)
-    : DefaultMapper(rt, m, p) { }
-public:
-  static void register_custom_mappers(Machine machine, Runtime *rt,
-                                      const std::set<Processor> &local_procs);
-};
-
-/*static*/
-void CustomMapperA::register_custom_mappers(Machine machine, Runtime *rt,
-                                            const std::set<Processor> &local_procs)
-{
-  printf("Replacing default mappers with custom mapper A on all processors...\n");
-  MapperRuntime *const map_rt = rt->get_mapper_runtime();
-  for (std::set<Processor>::const_iterator it = local_procs.begin();
-       it != local_procs.end(); it++)
-    {
-      rt->replace_default_mapper(new CustomMapperA(map_rt, machine, *it), *it);
-    }
-}
-
-class CustomMapperB : public DefaultMapper {
-public:
-  CustomMapperB(MapperRuntime *rt, Machine m, Processor p)
-    : DefaultMapper(rt, m, p) { }
-public:
-  static void register_custom_mappers(Machine machine, Runtime *rt,
-                                      const std::set<Processor> &local_procs);
-};
-
-/*static*/
-void CustomMapperB::register_custom_mappers(Machine machine, Runtime *rt,
-                                            const std::set<Processor> &local_procs) 
-{
-  printf("Adding custom mapper B for all processors...\n");
-  MapperRuntime *const map_rt = rt->get_mapper_runtime();
-  for (std::set<Processor>::const_iterator it = local_procs.begin();
-       it != local_procs.end(); it++)
-    {
-      rt->add_mapper(1/*MapperID*/, new CustomMapperA(map_rt, machine, *it), *it);
-    }
-}
-
-int main(int argc, char **argv)
-{
-  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  {
-    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
-    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<top_level_task>(registrar);
+{  \small
+  \lstinputlisting[linerange={14,78}]{Examples/Mapping/registration/registration.cc}
   }
-  Runtime::add_registration_callback(CustomMapperA::register_custom_mappers);
-  Runtime::add_registration_callback(CustomMapperB::register_custom_mappers);
-
-  return Runtime::start(argc, argv);
-}
-\end{lstlisting}
 \caption{\legionbook{Mapping/registration/registration.cc}}
 \label{fig:mapper_registration}
 \end{figure}
@@ -149,13 +100,13 @@ argument a function pointer to be invoked. The function pointer must
 have a specific type, taking as arguments a {\tt Machine} object, 
 a {\tt Runtime} pointer, and a reference to an STL set of {\tt Processor}
 objects. The call can be invoked multiple times to record multiple
-callback functions (e.g., to register multiple custom mappers). All
+callback functions (e.g., to register multiple custom mappers, perhaps for different libraries). All
 callback functions must be added prior to the invocation of the 
 {\tt Runtime::start} method. We recommend that applications include the registration
 method as a static method on the mapper class (as in Figure~\ref{fig:mapper_registration})
 so that it is closely coupled to the custom mapper itself.
 
-Before invoking any of the callback functions, the runtime 
+Before invoking any of the registration callback functions, the runtime 
 creates an instance of the default mapper for each processor of
 the system. The runtime then invokes the callback functions in the order
 they were added. Each callback function is invoked once on each 
@@ -176,27 +127,27 @@ Upon invocation, the registration callbacks should create instances
 of custom mappers and associate them with application processors. 
 This step can be done through one of two runtime mapper calls. The mapper
 can replace the default mappers (always registered with {\tt MapperID}
-0) by calling {\tt Runtime::replace\_default\_mapper}, whichis the
+0) by calling {\tt Runtime::replace\_default\_mapper}, which is the
 only way to replace the default mappers. Alternatively, the registration
 callback can use {\tt Runtime::add\_mapper} to register a mapper with a
 new {\tt MapperID}. Both the {\tt Runtime::replace\_default\_mapper} and
 the {\tt Runtime::add\_mapper} methods support an optional processor
 argument, which tells the runtime to associate the mapper with a specific
-processor. If no processor is specified, the mapper will be associated 
-with all processors on the local node. This choice is mapper-specific:
-whether one mapper object should handle a single application processor's
-mapping decisions, or whether it should handle the mapping decisions for
-all application processors on a node. Legion supports both use cases
+processor. If no processor is specified, the mapper is associated 
+with all processors on the local node. The choice between 
+one mapper object should handle a single application processor's
+mapping decisions one mapper object handling  mapping decisions for
+all application processors on a node is mapper-specfirc. Legion supports both use cases
 and it is up to custom mappers to make the best choice. From a performance
 perspective, the best choice is likely to depend on the mapper synchronization
 model (see Section~\ref{subsec:mapping:sync}).
 
-When creating custom mappers, the registration callback should get a pointer
-to the {\tt MapperRuntime} and pass it as an argument to all mapper objects.
-The mapper runtime will provide the interface for mapper calls to call back
+Note that the mapper calls require a pointer to the {\tt MapperRuntime}, such as on
+lines 27 and 49 of Figure~\ref{fig:mapper_registration}.
+The mapper runtime provides the interface for mapper calls to call back
 into the runtime to acquire access to different physical resources. We 
-will see instances of the use of the mapper runtime throughout the rest of
-the examples in this chapter.
+will see examples of the use of the mapper runtime throughout 
+this chapter.
 
 \subsection{Synchronization Model}
 \label{subsec:mapping:sync}
@@ -208,10 +159,10 @@ owned by the same mapper, it is possible that they will attempt to
 invoke mapper calls for the same mapper object concurrently. For both 
 productivity and correctness reasons, we do not want users to be
 responsible for making their mappers thread-safe. Therefore we allow
-mappers to specify a {\em synchronization model} which the runtime will
-follow when concurrent mapper calls are made.
+mappers to specify a {\em synchronization model} that the runtime 
+follows when concurrent mapper calls are made.
 
-Each mapper object can specify its own synchronization model via the
+Each mapper object can specify its synchronization model via the
 {\tt get\_mapper\_sync\_model} mapper call. The runtime invokes this
 method exactly once per mapper object immediately after the mapper is
 registered with the runtime. Once the synchronization model has been set
@@ -219,20 +170,20 @@ for a mapper object it cannot be changed. Currently three
 synchronization models are supported:
 
 \begin{itemize}
-\item Serialized Non-Reentrant - Calls to the
+\item {\em Serialized Non-Reentrant}. Calls to the
       mapper object are serialized and execute atomically. If the mapper 
       calls out to the runtime and the mapper call is preempted, 
       no other mapper calls can be invoked by the runtime.
       This synchronization model conforms to the original version of
       the Legion mapper interface.
-\item Serialized Reentrant - At most one mapper call
+\item {\em Serialized Reentrant}. At most one mapper call
       executes at a time. However, if a mapper call invokes a runtime
       method that preempts the mapper call, the runtime may
       execute another mapper call or resume a previously blocked
       mapper call. It is up to the user to handle any changes in internal mapper
       state that might occur while a mapper call is preempted (e.g., the
       invalidation of STL iterators to internal mapper data structures).
-\item Concurrent - Mapper calls to the same mapper object can
+\item {\em Concurrent}. Mapper calls to the same mapper object can
       proceed concurrently. Users can invoke the {\tt lock\_mapper} and
       {\tt unlock\_mapper} calls to perform their own synchronization
       of the mapper. This synchronization model is particularly useful for
@@ -249,13 +200,13 @@ between programmability and performance.
 
 All mappers are given a {\tt Machine} object to enable
 introspection of the hardware on which the application is executing. The
-{\tt Machine} object is a Realm-level object;  see {\tt realm/machine.h}.
+{\tt Machine} object is defined by Realm, Legion's low-level portability layer (see {\tt realm/machine.h}).
 
 There are two interfaces for querying the machine
 object. The old interface contains methods such as {\tt get\_all\_processors}
 and {\tt get\_all\_memories}. These methods populate STL data structures
-with the appropriate names of processors and memories. We {\bf strongly}
-discourage users from using these methods as they are not scalable on large
+with the appropriate names of processors and memories. We strongly
+discourage using these methods as they are not scalable on large
 architectures with tens to hundreds of thousands of processors or memories.
 
 The recommended, and more efficient and scalable, interface is based
@@ -265,9 +216,9 @@ object. After initialization the query lazily materializes the (entire) set of
 either processors or memories of the machine.
 The mapper applies {\em filters} to the query to reduce the
 set to processors or memories of interest.  These filters can include specializing
-the query on the kind of processors with the {\tt only\_kind} method or by
+the query to the local node using {\tt local\_address\_space}, to one kind of processors with the {\tt only\_kind} method, or by
 requesting that the processor or memory have a specific affinity to another
-processor or memory with the {\tt has\_affinity\_to}. Affinity can either be
+processor or memory with the {\tt has\_affinity\_to} method. Affinity can either be
 specified as a minimum bandwidth or a maximum latency. Figure~\ref{fig:mapper_machine}
 shows how to create a custom mapper that uses queries to find the local set of 
 processors with the same processor kind as and the memories with affinities to the local
@@ -276,75 +227,8 @@ encourage the creation of mappers that memoize the results of their most
 commonly invoked queries to avoid duplicated work.
 
 \begin{figure}
-\begin{lstlisting}
-void top_level_task(const Task *task,
-		    const std::vector<PhysicalRegion> &regions,
-		    Context ctx, 
-		    Runtime *runtime)
-{
-  printf("Running top level task...\n");
-}
-
-class MachineMapper : public DefaultMapper {
-public:
-  MachineMapper(MapperRuntime *rt, Machine m, Processor p);
-public:
-  static void register_machine_mappers(Machine machine, Runtime *rt,
-                                       const std::set<Processor> &local_procs);
-};
-
-MachineMapper::MachineMapper(MapperRuntime *rt, Machine m, Processor p)
-  : DefaultMapper(rt, m, p)
-{
-  // Find all processors of the same kind on the local node
-  Machine::ProcessorQuery proc_query(m);
-  // First restrict to the same node
-  proc_query.local_address_space();
-  // Make it the same processor kind as our processor
-  proc_query.only_kind(p.kind());
-  for (Machine::ProcessorQuery::iterator it = proc_query.begin(); 
-        it != proc_query.end(); it++)
-  {
-    // skip ourselves
-    if ((*it) == p)
-      continue;
-    printf("Mapper %s: shares " IDFMT "\n", get_mapper_name(), it->id);
-  }
-  // Find all the memories that are visible from this processor
-  Machine::MemoryQuery mem_query(m);
-  // Find affinity to our local processor
-  mem_query.has_affinity_to(p);
-  for (Machine::MemoryQuery::iterator it = mem_query.begin();
-        it != mem_query.end(); it++)
-    printf("Mapper %s: has affinity to memory " IDFMT "\n", get_mapper_name(), it->id);
-}
-
-/*static*/
-void MachineMapper::register_machine_mappers(Machine machine, Runtime *rt,
-                                             const std::set<Processor> &local_procs)
-{
-  printf("Replacing default mappers with custom mapper A on all processors...\n");
-  MapperRuntime *const map_rt = rt->get_mapper_runtime();
-  for (std::set<Processor>::const_iterator it = local_procs.begin();
-       it != local_procs.end(); it++)
-    {
-      rt->replace_default_mapper(new MachineMapper(map_rt, machine, *it), *it);
-    }
-}
-
-int main(int argc, char **argv)
-{
-  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
-  {
-    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level_task");
-    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<top_level_task>(registrar);
-  }
-  Runtime::add_registration_callback(MachineMapper::register_machine_mappers);
-
-  return Runtime::start(argc, argv);
-}
-\end{lstlisting}
+  {\small
+\lstinputlisting[linerange={22,80}]{Examples/Mapping/machine/machine.cc}}
 \caption{\legionbook{Mapping/machine/machine.cc}}
 \label{fig:mapper_machine}
 \end{figure}
@@ -353,36 +237,305 @@ int main(int argc, char **argv)
 \section{Mapping Tasks}
 \label{sec:mapping:tasks}
 
-\subsection{Overview of the Task Mapping Pipeline}
-select\_task\_options (once per task launch)
-select\_tasks\_to\_map (until task gets added to list)
-select\_sharding\_functor (once per task launch, if replicated execution)
-slice\_task (if index launch, can recurse, includes only local points if replicated execution)
-map\_task
-select\_task\_sources (for each region requirement, to decide where to pull the data from, if more than one option)
+There are a number of different kinds of operations with mapping callbacks, but the core of the mapping interface, and the parts
+of mappers that users will most commonly customize, are the callbacks for mapping tasks.
+When a task is launched it proceeds through a pipeline of mapping callbacks.  The most important pipeline stages are:
+\begin{enumerate}
+\item {\tt select\_task\_options }
+\item {\tt select\_sharding\_functor} (for control-replicated tasks)
+\item {\tt slice\_task }  (for index launches)
+\item {\tt select\_tasks\_to\_map} (tasks remain in this stage until selected for mapping)
+\item {\tt map\_task}
+\end{enumerate}
+Stages 2 and 3 do not apply to every task, and tasks may repeat stage 4 any number of times depending on the implementation of {\tt select\_tasks\_to\_map}.
 
-\subsection{Task Placement}
-\label{subsec:mapping:placement}
+After discussing these five components of the task mapping pipeline, we discuss a few other topics relevant to task mapping: allocating new physical instances, postmapping of tasks, virtual mappings, and profiling requests.
 
-\subsection{Selecting Task Variants}
-\label{subsec:mapping:variants}
+\subsection{Controlling Task Mapping}
+{\tt select\_task\_options} is the first callback for mapping tasks. It is invoked for every task $t$ exactly once in the Legion process where $t$ is launched.
+The signature of the function is:
+\begin{lstlisting}
+ virtual void select_task_options(const MapperContext    ctx,
+                                   const Task&            task,
+                                   TaskOptions&           output) = 0;
+\end{lstlisting}
+The purpose of the callback is to set fields of the {\tt output} object.  All of the fileds have defaults, so none are required to be set by the callback implementation.
+This callback comes first because the fields of {\tt TaskOptions} control the rest of the mapping process for the task.
+\begin{itemize}
+\item For a single task $t$ (not an index launch), {\tt output.initial\_proc} is the processor that will execute $t$; the default is the current processor.
+  The processor does not need to be local---the mapper can select any processor in the machine model for which a variant of $t$ exists.  As we will see, $t$'s target processor can be changed by subsequent stages.  The reason for choosing a target processor
+  here is that by default $t$ is sent to the Legion process that manages the target processor to be mapped.
+
+\item If {\tt output.inline\_task} is true (the default is false) the task will be inlined into the parent task and use the parent task's regions.  Any needed regions that are unmapped will be remapped.  Inline tasks do not go through the rest of the task pipeline, except for the selection of
+  a task variant.  
+
+\item   If {\tt output.stealable} is true then the task can be stolen for load balancing; the default is false.  A stealable task $t$ can be stolen by another mapper until $t$ is chosen by {\tt select\_tasks\_to\_map}.
+
+\item As mentioned above, by default the {\tt map\_task} stage of the mapping pipeline is done by the Legion process that manages the processor where the task will execute.  If {\tt output.map\_locally} is true (the default is false) then {\tt map\_task} will be run by the current mapper.
+  Just to emphasize: {\tt map\_locally} controls where a mapping callback for the task is run, not where the task executes.  This option is mostly useful for leaf tasks that will be sent to remote processors.  In this case, making the  mapping decisions locally saves transmitting
+  task metadata to the remote Legion runtime.
+
+\item If {\tt valid\_instances} is set to false, then the task will not recieve a list of the currently valid instances of regions in subsequent calls to {\tt request\_valid\_instances}, which saves some runtime overhead.  This setting is useful if the task will never use
+  a currently valid region instance, such as when all the regions of an inner task will be virtually mapped.
+
+\item Setting {\tt replicate\_default} to true turns on replication of single tasks when in a control-replication context, which means that the task will be executed separately in every Legion process participating in the replication of the parent task.  The default setting
+  is false; in this case only one instance of a single task with a conrol-replicated parent is executed on one processor and then the results are broadcast to the other Legion processes.  Replicating single tasks avoids the broadcast communication.  There are some restrictions on replicated single tasks to ensure the
+  replicated versions all have identical behavior: the tasks cannot have reduction-only privileges on any field, and any fields with write privileges must use a separate instance for each replicated task.
+
+\item A task can set the priority of the parent task by modifying {\tt  output.parent\_priority}, if that is permitted by the mapper.  The default is the parent's current priority.  When tasks are ready to execute, tasks with higher priority are moved to the front of the ready queue.
+\end{itemize}
+
+\subsection{Sharding}
+As the name suggests, {\tt select\_sharding\_functor} is used to select the functor for {\em sharding} index task launches in control-replicated contexts.  Sharding divides the index space of the task launch into subspaces and associates each shard with a mapper (a processor)
+where those tasks will be mapped.  This callback is invoked once per replicated task index launch in each replicated context:
+\begin{lstlisting}
+virtual void select_sharding_functor(
+    const MapperContext ctx,
+    const Task& task,
+    const SelectShardingFunctorInput& input,
+    SelectShardingFunctorOutput& output) = 0;
+
+struct SelectShardingFunctorInput {
+   std::vector<Processor> shard_mapping;
+};
+
+struct SelectShardingFunctorOutput {
+   ShardingID chosen_functor;
+   bool slice_recurse;
+};
+\end{lstlisting}
+The {\tt shard\_mapping} of the input structure provides a vector of the processors where the replicated task is running.  The callback must fill in the {\tt chosen\_functor} field of the output structure with the id of a sharding function registered with the mapper at
+startup.  The callback can set {\tt slice\_recurse} to indicate whether or not the index subspaces chosen by the sharding functor should be recursively sharded on the destination processor.  The same sharding functor must be selected in every control-replicated context, which
+will be checked by the runtime if run in debug mode.
+
+\subsection{Slicing}
+{\tt slice\_task} is called for every index launch.  To make index launches efficient, the index space of tasks is first sliced into smaller sets of tasks and each set is sent to a destination mapper as a single object rather than sending
+multiple individual tasks.  The signature of {\tt slice\_task} is:
+\begin{lstlisting}
+virtual void slice_task(const MapperContext ctx,
+                        const Task& task,
+                        const SliceTaskInput& input,
+                        SliceTaskOutput& output) = 0;
+\end{lstlisting}
+
+
+The {\tt SliceTaskInput} includes the index space of the task launch (field {\tt domain\_is)}.  The index space of the shard is also included for control-replicated tasks.
+\begin{lstlisting}
+struct SliceTaskInput {
+   IndexSpace domain_is;
+   Domain domain;
+   IndexSpace sharding_is;
+};
+\end{lstlisting}
+The implementation of {\tt slice\_task} should set the fields of {\tt SliceTaskOutput}:
+\begin{lstlisting}
+struct SliceTaskOutput {
+    std::vector<TaskSlice> slices;
+    bool verify_correctness; // = false                                                                                            
+
+struct TaskSlice {
+    public:
+        TaskSlice(void) : domain_is(IndexSpace::NO_SPACE),
+          domain(Domain::NO_DOMAIN), proc(Processor::NO_PROC),
+          recurse(false), stealable(false) { }
+        TaskSlice(const Domain &d, Processor p, bool r, bool s)
+          : domain_is(IndexSpace::NO_SPACE), domain(d),
+            proc(p), recurse(r), stealable(s) { }
+        TaskSlice(IndexSpace is, Processor p, bool r, bool s)
+          : domain_is(is), domain(Domain::NO_DOMAIN),
+            proc(p), recurse(r), stealable(s) { }
+    public:
+        IndexSpace domain_is;
+        Domain domain;
+        Processor proc;
+        bool recurse;
+        bool stealable;
+};
+\end{lstlisting}
+The {\tt slices} field is a vector of {\tt TaskSlice}, each of which names a subspace of the index space in {\tt domain\_is} and a destination processor for the slice of tasks {\tt proc}.  The tasks of the slice can be marked as stealable, and setting the {\tt recurse} field
+means that {\tt slice\_task} will be called again by the mapper associated with the destination processor to allow the slice to be further subdivided before processing individual tasks.
+
+\subsection{Selecting Tasks to Map}
+{\tt select\_tasks\_to\_map} gives the mapper control over which tasks should be mapped and which should be sent to other processors---the initial processor assignment set in {\tt select\_task\_options} can be changed if desired.  At this point
+in the task mapping pipeline all index tasks have been expanded into single tasks, and {\tt select\_tasks\_to\_map} is called by the mapper associated with the destination process, unless {\tt map\_locally} was chosen in {\tt select\_task\_options}.
+The signature of the callback is:
+\begin{lstlisting}
+      virtual void select_tasks_to_map(const MapperContext ctx,
+                                       const SelectMappingInput& input,
+                                       SelectMappingOutput& output) = 0;
+      struct SelectMappingInput {
+        std::list<const Task*> ready_tasks;
+      };
+      struct SelectMappingOutput {
+        std::set<const Task*> map_tasks;
+        std::map<const Task*,Processor> relocate_tasks;
+        MapperEvent deferral_event;
+      };
+\end{lstlisting}
+For each task in {\tt ready\_tasks} of the {\tt SelectMappingInput} structure, the callback implementation can do one of three things:
+\begin{itemize}
+\item Add the task to {\tt map\_tasks}, in which case the task will proceed with mapping on the assigned local processor.
+\item Add the task to {\tt relocate\_tasks} along with a new destination processor to which the task will be transferred.
+\item Nothing, in which case the task will remain in the {\tt ready\_tasks} list for the next call to {\tt select\_tasks\_to\_map}.
+\end{itemize}
+If the call does not select at least one task to map or transfer, then it must provide a {\tt MapperEvent} in the field {\tt deferral\_event}---another call to {\tt select\_tasks\_to\_map} will not be made until that event is triggered.
+Of course, it is up to the mapper to guarantee that that event is eventually triggered.
+
+\subsection{Map\_Task}
+\label{subsec:maptask}
+
+{\tt map\_task} is normally the final stage of the task mapping pipeline.  This callback selects a processor or processors for the task, maps the task's region arguments, and selects the task variant to use, after which the task will run on one of the selected processors.
+\begin{lstlisting}
+virtual void map_task(
+    const MapperContext ctx,
+    const Task& task,
+    const MapTaskInput& input,
+    MapTaskOutput& output) = 0;
+
+struct MapTaskInput {
+    std::vector<std::vector<PhysicalInstance> > valid_instances;
+    std::vector<unsigned>                       premapped_regions;
+};
+
+struct MapTaskOutput {
+    std::vector<std::vector<PhysicalInstance> > chosen_instances; 
+    std::vector<std::vector<PhysicalInstance> > source_instances;
+    std::vector<Memory> output_targets;
+    std::vector<LayoutConstraintSet> output_constraints;
+    std::set<unsigned> untracked_valid_regions;
+    std::vector<Memory>future_locations;
+    std::vector<Processor> target_procs;
+    VariantID chosen_variant; // = 0 
+    TaskPriority task_priority;  // = 0
+    TaskPriority profiling_priority;
+    ProfilingRequest task_prof_requests;
+    ProfilingRequest copy_prof_requests;
+    bool postmap_task; // = false
+};
+\end{lstlisting}
+The callback must fill in the following fields of the {\tt output} structure:
+\begin{itemize}
+\item {\tt target\_procs} is a vector of processors.  All processors must be on the same node and of the same kind (e.g., all LOCs or all TTOCs).  The runtime will execute the task on the first processor in the vector that becomes available.
+\item {\tt chosen\_variant} is the {\tt VariantID} of a variant of the task.  The chosen variant must be compatible with the chosen processor kind.
+\item For each region requirement, the {\tt input} structure has a vector of valid instances of the region in the same order
+  as region requirements are added to the task launcher.  The entry of the {\tt chosen\_instances} field should be filled either  with one or more
+  instances the correponding entry of {\tt valid\_instances}, or the mapper can add newly created instances.  A new instance is created by the runtime call
+  {\tt create\_physical\_instance}, which, in addition to other arguments, takes a target memory in which the instance should be created and a vector of logical regions---physical instances can be created that hold the data of multiple logical regions.
+  If new physical regions are created, the mapper call {\tt select\_task\_sources} will be invoked to choose instances to be the source of data to fill those new instances (see below).
+
+\item For any regions that are strictly output regions (e.g, with {\tt WRITE\_DISCARD} privileges) where no input data will be loaded, the callback must fill in the {\tt output\_targets} with a memory for the corresponding
+  region requirement.  These memories must be visible to the selected processor(s).
+  
+\item The callback should set a memory that will hold each future produced by the task in {\tt future\_locations}.
+
+\item Normally the runtime system will retain regions with valid data even if no tasks are known that will use those regions at the time the task finishes.  This policy can lead to an accumulation of read-only regions that are never garbage colleted (since read-only regions
+  are not invalidated by any write operations).  This policy can be controlled by setting {\tt untracked\_valid\_regions} by giving the index of the region requirement of a read only region that should be garbage collected after the task is complete.
+
+\item Optionally the task may request that the {\tt postmap\_task} be invoked for this task once mapping is complete; see Section~\ref{subsec:postmap}.
+\end{itemize}  
+
 
 \subsection{Creating Physical Instances}
 \label{subsec:mapping:instances}
 
+New phyiscal istances are created by the runtime call {\tt create\_physical\_instance}:
+\begin{lstlisting}
+    bool MapperRuntime::create_physical_instance(
+                                    MapperContext ctx, Memory target_memory,
+                                    const LayoutConstraintSet &constraints, 
+                                    const std::vector<LogicalRegion> &regions,
+                                    PhysicalInstance &result, 
+                                    bool acquire, GCPriority priority,
+                                    bool tight_bounds, size_t *footprint,
+                                    const LayoutConstraint **unsat) const
+\end{lstlisting}
+Besides the standard runtime context, the aarguments to this function are that we have not seen before are:
+\begin{itemize}
+\item The {\tt target\_memory} is the memory where the instance will be created.
+  \item  The {\tt constraints} specify the layout constraints of the region, such as whether it should be laid out in column-major or row-major order for 2D index spaces.  Constraints apply to tasks as well as regions and are discussed in Section~\ref{sec:constraints}.
+\item The {\tt regions} field is a vector of logical regions, all of which should be included in the created instance.  The ability to have more than one logical region in an instance allows for colocation of data from multiple regions.
+\item The {\tt result} field holds the newly created instance after the call returns; if successful the function returns true.
+\item If {\tt tight\_bounds} is true, then the call will select the most specific (tightest) solution to the constraints, if more than one solution is possible.  Otherwise, the runtime is free to pick any valid solution.
+\item {\tt footprint} holds the size of the allocated instance in bytes.
+\item {\tt unsat} holds any constraints that could not be satisfied if the call fails.
+\end{itemize}
+
+The runtime function {\tt find\_or\_create\_physical\_instance} provides higher level functionality that preferentially finds an existing physical instance satisfying some constraints or creates a new one if necessary.  The default mapper also provides
+higher-level functions that wrap {\tt create\_physical\_instance}; see {\tt default\_create\_custom\_instances} for an example.
+
+When a new physical instance is created, if its contents may be read the mapper callback {\tt select\_task\_sources} will be invoked to pick a source of data for the instance:
+
+\begin{lstlisting}
+virtual void select_task_sources(const MapperContext ctx,
+   const Task& task,
+   const SelectTaskSrcInput& input,
+   SelectTaskSrcOutput& output) = 0;
+
+struct SelectTaskSrcInput {
+   PhysicalInstance target;
+   std::vector<PhysicalInstance> source_instances;
+   unsigned region_req_index;
+};
+
+struct SelectTaskSrcOutput {
+   std::deque<PhysicalInstance> chosen_ranking;
+};
+\end{lstlisting}
+An implementation of this callback fills in {\tt chosen\_ranking} with a queue of instances selected from {\tt source\_instances}, most preferred instance first.  The default mapper, for example, ranks instances in order of bandwidth between the
+source instance and the target memory---see {\tt default\_policy\_select\_target\_memory} in {\tt default\_mapper.cc}.
+
+Despite its name, this callback is also used for other operations that create new physical instances, such as copy operations.
+
+\subsection{Postmapping}
+\label{subsec:postmap}
+
+The callback {\tt postmap\_task} is called only if requested by {\tt map\_task} (see Section~\ref{subsec:maptask}).  The purpose
+of this callback is to allow additional copies of regions updated by a task to be made once the task has finished.  As input
+the callback is given the mapped instances for each region requirement as well as the valid instances.  The callback should fill
+in {\tt chosen\_instances} with a vector for each region requirement of additional copies to be made; possible sources of these
+copies are specified by {\tt source\_instances}.
+
+\begin{lstlisting}
+virtual void postmap_task(
+    const MapperContext ctx,
+    const Task& task,
+    const PostMapInput& input,
+    PostMapOutput& output) = 0;
+
+struct PostMapInput {
+    std::vector<std::vector<PhysicalInstance> > mapped_regions;
+    std::vector<std::vector<PhysicalInstance> > valid_instances;
+};
+
+struct PostMapOutput {
+    std::vector<std::vector<PhysicalInstance> > chosen_instances;
+    std::vector<std::vector<PhysicalInstance> > source_instances;
+};
+\end{lstlisting}
+
+
 \subsection{Using Virtual Mappings}
 \label{subsec:mapping:virtual}
+A useful optimization is to use {\em virtual mapping} for a logical region argument that a task does not use itself but only passes
+as an argument to a subtask.  A virtual mapping is just a way of recording that no physical instance will be created for the region
+argument, but the name and metadata for the region are still available so that it can be passed as an argument to subtasks.
+
+The function {\tt PhysicalInstances::get\_virtual\_instance()} returns a virtual instance which can be used as the chosen physical
+isntance of a region requirement.   If a task variant is marked as an {\tt inner} task (meaning that does not access any of its regions and only passes them on to subclasses), the default mapper will use virtual instances for all of the region arguments, except for fields with reduction privileges, for which the Legion runtime always requires a real physical instance to be mapped.  See {\tt map\_task} in {\tt default\_mapper.cc}.
 
 \subsection{Profiling Requests}
 \label{subsec:mapping:profiling}
 
-\subsection{Resilience Support}
-\label{subsec:mapping:resilience}
-
-
+Legion has a general interface to profiling through the type {\tt ProfileRequest}, which has one public method, {\tt add\_measurement()}.
+Most Legion operations take an optional profile request that will turn on the gathering of profiling information for that specific operation.
+Most profiling is done in the Realm low-level runtime, and running a Legion program with the command-line flag {\tt -lg:prof} will turn on
+profiling of many runtime operations; see \url{https://legion.stanford.edu/profiling/index.html#legion-prof} for an introduction to using
+the Legion profiler.  Most users only use the Legion profiler, but {\tt ProfileRequests} are available for users who want more
+selective control over profiling.
 
 \section{Mapping Other Operations}
 \label{sec:mapping:others}
+
 
 \subsection{Mapping Copies}
 \label{subsec:mapping:copies}
@@ -390,22 +543,22 @@ select\_task\_sources (for each region requirement, to decide where to pull the 
 \subsection{Mapping Acquires and Releases}
 \label{subsec:mapping:acquires}
 
-\subsection{Mapping Must Epoch Launches}
-\label{subsec:mapping:mustepoch}
-
-
-
-\section{Managing Execution}
-\label{sec:mapping:execution}
-
-\subsection{Context Management}
-\label{subsec:mapping:context}
-
-\subsection{Mapper Communication}
-\label{subsec:mapping:communication}
+%\subsection{Mapping Must Epoch Launches}
+%\label{subsec:mapping:mustepoch}
 
 \subsection{Controlling Stealing}
 \label{subsec:mapping:stealing}
+
+
+%\section{Managing Execution}
+%\label{sec:mapping:execution}
+
+%\subsection{Context Management}
+%\label{subsec:mapping:context}
+
+%\subsection{Mapper Communication}
+%\label{subsec:mapping:communication}
+
 
 \section{Mappers Included with Legion}
 
