@@ -523,6 +523,14 @@ argument, but the name and metadata for the region are still available so that i
 The function {\tt PhysicalInstances::get\_virtual\_instance()} returns a virtual instance which can be used as the chosen physical
 isntance of a region requirement.   If a task variant is marked as an {\tt inner} task (meaning that does not access any of its regions and only passes them on to subclasses), the default mapper will use virtual instances for all of the region arguments, except for fields with reduction privileges, for which the Legion runtime always requires a real physical instance to be mapped.  See {\tt map\_task} in {\tt default\_mapper.cc}.
 
+
+
+\section{Other Mapping Features}
+\label{sec:mapping:others}
+
+Custom policies for mapping tasks and their region requirements are the most common reasons for users to write their own mappers.
+In this section we cover a few other mapping features that can be included in custom mappers.  This section is very incomplete; only
+a handful of calls relevant to other features covered in this manual are currently included.
 \subsection{Profiling Requests}
 \label{subsec:mapping:profiling}
 
@@ -533,22 +541,76 @@ profiling of many runtime operations; see \url{https://legion.stanford.edu/profi
 the Legion profiler.  Most users only use the Legion profiler, but {\tt ProfileRequests} are available for users who want more
 selective control over profiling.
 
-\section{Mapping Other Operations}
-\label{sec:mapping:others}
-
-
-\subsection{Mapping Copies}
-\label{subsec:mapping:copies}
 
 \subsection{Mapping Acquires and Releases}
 \label{subsec:mapping:acquires}
 
+The callback {\tt map\_acquire} is called for every {\tt acquire} operation.  Other than the possibility of adding a profiling request, there
+is nothing that can be modified about for {\tt map\_acquire}.
+
+For the callback {\tt map\_release} there is a non-trivial policy decision to make:
+\begin{lstlisting}
+virtual void select_release_sources(
+   const MapperContext ctx,
+   const Release& release,
+   const SelectReleaseSrcInput& input,
+   SelectReleaseSrcOutput&  output) = 0;
+
+struct SelectReleaseSrcInput {
+   PhysicalInstance target;
+   std::vector<PhysicalInstance> source_instances;
+};
+
+struct SelectReleaseSrcOutput {
+   std::deque<PhysicalInstance> chosen_ranking;
+};
+\end{lstlisting}
+Recall that the semantics of release is that it restores the copy restriction on a region with simultaneous coherence and any updates
+to the region are flushed to the original {\tt target} instance.  This call allows the mapper to produce a ranking {\tt chosen\_ranking} of
+which of the valid instances of the region {\tt source\_instances} should be the source of the copy to the {\tt target} at the point of the relase.
 %\subsection{Mapping Must Epoch Launches}
 %\label{subsec:mapping:mustepoch}
 
 \subsection{Controlling Stealing}
 \label{subsec:mapping:stealing}
 
+There are two callbacks for controlling how tasks are stolen.  A mapper may try to steal tasks from another mapper using {\tt select\_steal\_targets}, and a mapper can control which tasks it allows to be stolen using {\tt permit\_steal\_request}.
+
+Mappers that want to steal tasks should have non-trivial implementations of {\tt seelct\_steal\_targets}.  The callback sets
+{\tt targets} to a set of processors from which tasks can be stolen.  A {\tt blacklist} is supplied as input, which records processors
+for which a previous steal request failed due to insufficient work.  The blacklist is managed automatically by the runtime system, and
+processors are removed from the blacklist when they acquire additional work.
+\begin{lstlisting}
+struct SelectStealingInput {
+   std::set<Processor> blacklist;
+};
+
+struct SelectStealingOutput {
+   std::set<Processor> targets;
+};
+
+virtual void select_steal_targets(
+   const MapperContext ctx,
+   const SelectStealingInput& input,
+   SelectStealingOutput& output) = 0;
+\end{lstlisting}
+
+When a mapper receives a steal request the {\tt permit\_steal\_request} callback is invoked, notifying the mapper of the requesting
+processors (the {\tt thief}) and the tasks the mapper has available to steal, from which the callback selects a set of {\tt stolen\_tasks}.
+\begin{lstlisting}
+struct StealRequestInput {
+   Processor thief_proc;
+   std::vector<const Task*> stealable_tasks;
+};
+
+struct StealRequestOutput {
+   std::set<const Task*> stolen_tasks;
+};
+
+virtual void permit_steal_request(const MapperContext ctx,
+   const StealRequestInput& input,
+   StealRequestOutput& output) = 0;
+\end{lstlisting}
 
 %\section{Managing Execution}
 %\label{sec:mapping:execution}
@@ -564,8 +626,17 @@ selective control over profiling.
 
 Default mapper
 
-Logging mapper
-
 Null mapper
+Asserts on all mapper calls. Useful for writing a mapper from scratch.
 
+Replay mapper
+replays mapping decisions recorded in a replay file by Legion Spy
+
+Logging wrapper
+ To use with your own mapper, replace any use of `new MyMapper(...)` in your
+ code with `new LoggingWrapper(new MyMapper(...))` and run with
+ `-level mapper=2`. Enabling Realm-level instance reporting might also be
+ useful (`-level inst=1`).
+
+Forwarding mapper
 
