@@ -306,7 +306,7 @@ struct SelectShardingFunctorOutput {
 \end{lstlisting}
 The {\tt shard\_mapping} of the input structure provides a vector of the processors where the replicated task is running.  The callback must fill in the {\tt chosen\_functor} field of the output structure with the id of a sharding function registered with the mapper at
 startup.  The callback can set {\tt slice\_recurse} to indicate whether or not the index subspaces chosen by the sharding functor should be recursively sharded on the destination processor.  The same sharding functor must be selected in every control-replicated context, which
-will be checked by the runtime if run in debug mode.
+will be checked by the runtime when in debug mode.
 
 \subsection{Slicing}
 {\tt slice\_task} is called for every index launch.  To make index launches efficient, the index space of tasks is first sliced into smaller sets of tasks and each set is sent to a destination mapper as a single object rather than sending
@@ -352,7 +352,7 @@ struct TaskSlice {
         bool stealable;
 };
 \end{lstlisting}
-The {\tt slices} field is a vector of {\tt TaskSlice}, each of which names a subspace of the index space in {\tt domain\_is} and a destination processor for the slice of tasks {\tt proc}.  The tasks of the slice can be marked as stealable, and setting the {\tt recurse} field
+The {\tt slices} field is a vector of {\tt TaskSlice}, each of which names a subspace of the index space in {\tt domain\_is} and a destination processor {\tt proc} for the slice of tasks.  The tasks of the slice can be marked as stealable, and setting the {\tt recurse} field
 means that {\tt slice\_task} will be called again by the mapper associated with the destination processor to allow the slice to be further subdivided before processing individual tasks.
 
 \subsection{Selecting Tasks to Map}
@@ -379,7 +379,7 @@ For each task in {\tt ready\_tasks} of the {\tt SelectMappingInput} structure, t
 \item Nothing, in which case the task will remain in the {\tt ready\_tasks} list for the next call to {\tt select\_tasks\_to\_map}.
 \end{itemize}
 If the call does not select at least one task to map or transfer, then it must provide a {\tt MapperEvent} in the field {\tt deferral\_event}---another call to {\tt select\_tasks\_to\_map} will not be made until that event is triggered.
-Of course, it is up to the mapper to guarantee that that event is eventually triggered.
+Of course, it is up to the mapper to guarantee that the event is eventually triggered.
 
 \subsection{Map\_Task}
 \label{subsec:maptask}
@@ -413,15 +413,19 @@ struct MapTaskOutput {
     bool postmap_task; // = false
 };
 \end{lstlisting}
+The input structure contains a vector of vector of valid instances: each element of the vector is a vector of instances that
+hold valid data for the corresponding region requirement.  The {\tt pre\_mapped} regions is a vector of indices of region
+requirements that are already satisfied and do not need to be mapped by the callback.
+
 The callback must fill in the following fields of the {\tt output} structure:
 \begin{itemize}
-\item {\tt target\_procs} is a vector of processors.  All processors must be on the same node and of the same kind (e.g., all LOCs or all TTOCs).  The runtime will execute the task on the first processor in the vector that becomes available.
+\item {\tt target\_procs} is a vector of processors.  All processors must be on the same node and of the same kind (e.g., all LOCs or all TOCs).  The runtime will execute the task on the first processor in the vector that becomes available.
 \item {\tt chosen\_variant} is the {\tt VariantID} of a variant of the task.  The chosen variant must be compatible with the chosen processor kind.
 \item For each region requirement, the {\tt input} structure has a vector of valid instances of the region in the same order
   as region requirements are added to the task launcher.  The entry of the {\tt chosen\_instances} field should be filled either  with one or more
-  instances the correponding entry of {\tt valid\_instances}, or the mapper can add newly created instances.  A new instance is created by the runtime call
+  instances from the correponding entry of {\tt valid\_instances}, or the mapper can add newly created instances.  A new instance is created by the runtime call
   {\tt create\_physical\_instance}, which, in addition to other arguments, takes a target memory in which the instance should be created and a vector of logical regions---physical instances can be created that hold the data of multiple logical regions.
-  If new physical regions are created, the mapper call {\tt select\_task\_sources} will be invoked to choose instances to be the source of data to fill those new instances (see below).
+  If new physical regions are created, the mapper calls {\tt select\_task\_sources} to choose existing instances to be the source of data to fill those new instances (see below).
 
 \item For any regions that are strictly output regions (e.g, with {\tt WRITE\_DISCARD} privileges) where no input data will be loaded, the callback must fill in the {\tt output\_targets} with a memory for the corresponding
   region requirement.  These memories must be visible to the selected processor(s).
@@ -429,7 +433,8 @@ The callback must fill in the following fields of the {\tt output} structure:
 \item The callback should set a memory that will hold each future produced by the task in {\tt future\_locations}.
 
 \item Normally the runtime system will retain regions with valid data even if no tasks are known that will use those regions at the time the task finishes.  This policy can lead to an accumulation of read-only regions that are never garbage colleted (since read-only regions
-  are not invalidated by any write operations).  This policy can be controlled by setting {\tt untracked\_valid\_regions} by giving the index of the region requirement of a read only region that should be garbage collected after the task is complete.
+  are not invalidated by any write operations).  This policy can be controlled by specifying a set of indices of read-only regions
+  in {\tt untracked\_valid\_regions}---these instances will be marked for garbage collection after the task is complete.
 
 \item Optionally the task may request that the {\tt postmap\_task} be invoked for this task once mapping is complete; see Section~\ref{subsec:postmap}.
 \end{itemize}  
@@ -449,10 +454,10 @@ New phyiscal istances are created by the runtime call {\tt create\_physical\_ins
                                     bool tight_bounds, size_t *footprint,
                                     const LayoutConstraint **unsat) const
 \end{lstlisting}
-Besides the standard runtime context, the aarguments to this function are that we have not seen before are:
+Besides the standard runtime context, the arguments to this function are:
 \begin{itemize}
 \item The {\tt target\_memory} is the memory where the instance will be created.
-  \item  The {\tt constraints} specify the layout constraints of the region, such as whether it should be laid out in column-major or row-major order for 2D index spaces.  Constraints apply to tasks as well as regions and are discussed in Section~\ref{sec:constraints}.
+  \item  The {\tt constraints} specify the layout constraints of the region, such as whether it should be laid out in column-major or row-major order for 2D index spaces.  Layout constraints are discussed in Section~\ref{sec:layout}.
 \item The {\tt regions} field is a vector of logical regions, all of which should be included in the created instance.  The ability to have more than one logical region in an instance allows for colocation of data from multiple regions.
 \item The {\tt result} field holds the newly created instance after the call returns; if successful the function returns true.
 \item If {\tt tight\_bounds} is true, then the call will select the most specific (tightest) solution to the constraints, if more than one solution is possible.  Otherwise, the runtime is free to pick any valid solution.
@@ -463,6 +468,8 @@ Besides the standard runtime context, the aarguments to this function are that w
 The runtime function {\tt find\_or\_create\_physical\_instance} provides higher level functionality that preferentially finds an existing physical instance satisfying some constraints or creates a new one if necessary.  The default mapper also provides
 higher-level functions that wrap {\tt create\_physical\_instance}; see {\tt default\_create\_custom\_instances} for an example.
 
+\subsection{Selecting Sources for New Physical Instances}
+\label{subsec:selectsources}
 When a new physical instance is created, if its contents may be read the mapper callback {\tt select\_task\_sources} will be invoked to pick a source of data for the instance:
 
 \begin{lstlisting}
@@ -521,7 +528,7 @@ as an argument to a subtask.  A virtual mapping is just a way of recording that 
 argument, but the name and metadata for the region are still available so that it can be passed as an argument to subtasks.
 
 The function {\tt PhysicalInstances::get\_virtual\_instance()} returns a virtual instance which can be used as the chosen physical
-isntance of a region requirement.   If a task variant is marked as an {\tt inner} task (meaning that does not access any of its regions and only passes them on to subclasses), the default mapper will use virtual instances for all of the region arguments, except for fields with reduction privileges, for which the Legion runtime always requires a real physical instance to be mapped.  See {\tt map\_task} in {\tt default\_mapper.cc}.
+isntance of a region requirement.   If a task variant is marked as an {\tt inner} task (meaning that it does not access any of its regions and only passes them on to subtasks), the default mapper will use virtual instances for all of the region arguments, except for fields with reduction privileges, for which the Legion runtime always requires a real physical instance to be mapped.  See {\tt map\_task} in {\tt default\_mapper.cc}.
 
 
 
@@ -545,10 +552,9 @@ selective control over profiling.
 \subsection{Mapping Acquires and Releases}
 \label{subsec:mapping:acquires}
 
-The callback {\tt map\_acquire} is called for every {\tt acquire} operation.  Other than the possibility of adding a profiling request, there
-is nothing that can be modified about for {\tt map\_acquire}.
+The callback {\tt map\_acquire} is called for every {\tt acquire} operation.  Other than the possibility of adding a profiling request, {\tt map\_acquire} has no options to set.
 
-For the callback {\tt map\_release} there is a non-trivial policy decision to make:
+For the callback {\tt map\_release} there is a policy decision to make:
 \begin{lstlisting}
 virtual void select_release_sources(
    const MapperContext ctx,
@@ -576,7 +582,7 @@ which of the valid instances of the region {\tt source\_instances} should be the
 
 There are two callbacks for controlling how tasks are stolen.  A mapper may try to steal tasks from another mapper using {\tt select\_steal\_targets}, and a mapper can control which tasks it allows to be stolen using {\tt permit\_steal\_request}.
 
-Mappers that want to steal tasks should have non-trivial implementations of {\tt seelct\_steal\_targets}.  The callback sets
+Mappers that want to steal tasks should implement {\tt select\_steal\_targets}.  This callback sets
 {\tt targets} to a set of processors from which tasks can be stolen.  A {\tt blacklist} is supplied as input, which records processors
 for which a previous steal request failed due to insufficient work.  The blacklist is managed automatically by the runtime system, and
 processors are removed from the blacklist when they acquire additional work.
@@ -596,7 +602,7 @@ virtual void select_steal_targets(
 \end{lstlisting}
 
 When a mapper receives a steal request the {\tt permit\_steal\_request} callback is invoked, notifying the mapper of the requesting
-processors (the {\tt thief}) and the tasks the mapper has available to steal, from which the callback selects a set of {\tt stolen\_tasks}.
+processor (the {\tt thief}) and the tasks the mapper has available to steal, from which the callback selects a set of {\tt stolen\_tasks}.
 \begin{lstlisting}
 struct StealRequestInput {
    Processor thief_proc;
@@ -621,33 +627,42 @@ virtual void permit_steal_request(const MapperContext ctx,
 %\subsection{Mapper Communication}
 %\label{subsec:mapping:communication}
 
-\section{Performance: Tracing}
-
-
-type TraceID
-\begin{lstlisting}
-for(...) {
-  runtime->begin_trace(ctx, TRACE_ID);
-  ...
-  runtime->end_trace(ctx, TRACE_ID);
-}
-\end{lstlisting}
+%\section{Performance: Tracing}
+%
+%
+%type TraceID
+%\begin{lstlisting}
+%for(...) {
+%  runtime->begin_trace(ctx, TRACE_ID);
+%  ...
+%  runtime->end_trace(ctx, TRACE_ID);
+%}
+%\end{lstlisting}
 
 \section{Mappers Included with Legion}
 
-Default mapper
+Several useful mappers are included in the Legion repository:
+\begin{itemize}
+  \item The {\em default mapper} has already been discussed.  The default mapper is a full implementation of the legion mapping
+    API with reasonably heuristics for every mapping callback.  The default mapper has grown over time---as users have found cases where
+    the default mapper did not perform well, improvements have been made.  As a result, the default mapper is a non-trivial
+    mapper, even though it still does not come close to achieving optimal mappings for most complex applications.
 
-Null mapper
-Asserts on all mapper calls. Useful for writing a mapper from scratch.
+  \item The {\em null mapper} is a base class that fails an assertion for every mapper API call.  The null mapper is a useful starting
+    point when writing a mapper from scratch, as the mapper will show exactly which API calls need to be implemented to support the application.
 
-Replay mapper
-replays mapping decisions recorded in a replay file by Legion Spy
+    
+  \item The {\em replay mapper} can be used to replay mapping decisions recorded in a replay file by Legion Spy.  The replay mapper
+    is used mostly for ensuring that a failed computation can be deterministically replayed to help diagnose the source of
+    bugs in the Legion runtime itself.
 
-Logging wrapper
- To use with your own mapper, replace any use of `new MyMapper(...)` in your
- code with `new LoggingWrapper(new MyMapper(...))` and run with
- `-level mapper=2`. Enabling Realm-level instance reporting might also be
- useful (`-level inst=1`).
+  \item The {\em logging wrapper} adds logging of mapping operations (which calls were made and with what arguments) to an existing mapper.
+ To use the logging wrapper, replace any use of {\tt new MyMapper(\ldots)} in the application
+with {\tt new LoggingWrapper(new MyMapper(\ldots))} and run with the command line flag
+ {\tt -level mapper=2}.
 
-Forwarding mapper
+\item  The {\em forwarding mapper } is a base class used to build mapper wrappers; the fowarding mapper simply forwards all mapper
+  calls to another mapper.  The logging wrapper is written using the forwarding mapper.
+\end{itemize}
+
 

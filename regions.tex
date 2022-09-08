@@ -161,10 +161,7 @@ that we need to discuss, then, is how the task accesses the data in {\tt FIELD\_
 Access to the fields of a region is done through a {\tt FieldAccessor}.  Accessors in Legion provide a level of indirection
 that shields application code from the details of how physical instances  are represented in memory.  Under the hood, 
 the Legion runtime chooses among many different representations depending on the circumstances, so this extra level
-of abstraction avoids having those details exposed and fixed in application code.  There are several different types of
-region accessors provided by Legion.  The {\tt Generic} accessor has 
-extensive debugging support and will, for example, detect out of bounds accesses, which is a common programming error.  The {\tt Generic} accessor is also very slow and should never be used in production code.  
-The {\tt FieldAccessor} used in Figure~\ref{fig:accessors} does no checking and is much more performant.
+of abstraction avoids having those details exposed and fixed in application code.
 
 In Figure~\ref{fig:accessors}, the field
 {\tt FIELD\_A} is named in the creation of a {\tt RegionAccessor} for the first (and only) physical region argument.
@@ -174,6 +171,28 @@ illustrates how to recover a region's index space from a physical instance of th
 Since this region has a dense index space, we convert the domain to a rectangle (using the {\tt get\_rect} method).
 All that is left, then, is to iterate over all the points of the index space (the rectangle {\tt rect}) and read the
 field {\tt FIELD\_A} for each such point in the region using the field accessor {\tt fa\_a}.
+
+The example in Figure~\ref{fig:accessors} uses an iterator, which is convenient when the index space is a dense rectangle and one
+wants to operate on all of the points in a region.  Accessors can also take a {\tt Point} argument of the correct dimension for their
+region to directly access a single point in the index space.
+
+There are many different types of
+region accessors provided by Legion.  We mention a few of the more common ones here; the comments in {\tt legion/runtime/legion.h} provides
+a good overview of the complete set of accessors.
+\begin{itemize}
+
+\item  There are many accessor constructors pre-defined for different combinations of privileges and field types.  For example,
+  a {\tt AccessorROfloat} is the type of an accessor with read-only privileges on a field of type {\tt float}.  The accessor in Figure~\ref{fig:accessors}
+  could have been constructed using {\tt AccessorROint(regns[0],FIELD\_A)} instead of directly invoking the {\tt FieldAccessor} template.
+
+\item  There is a different template, {\tt ReductionAccessor}, to use with reduction privileges.  For instances with reduction-only privileges, only {\tt ReductionAccessor}s should be used.
+
+\item The {\tt Generic} accessor has 
+extensive debugging support and will, for example, detect out of bounds accesses, which is a common programming error.  The {\tt Generic} accessor is also very slow and should never be used in production code.  
+The {\tt FieldAccessor} used in Figure~\ref{fig:accessors} does no checking and is much more performant.
+\end{itemize}
+
+
 
 \section{Fill Fields}
 \label{sec:fill}
@@ -267,3 +286,90 @@ mapping/unmapping of the region during intermediate task calls.
 Whenever a program explicitly maps or unmaps a region $r$ within a
 task, the Legion runtime will no longer silently wrap child task
 invocations with calls to unmap/map $r$.
+
+\section{Layout Constraints}
+\label{sec:layout}
+In Chapter~\ref{chap:tasks} we introduced the idea of a {\em constraint}, a restriction specified by the program on how the Legion runtime
+may use certain application objects, such as specifying what kind of processor a task can execute on.  The most commonly used constraints
+on regions are {\em layout constraints}.
+
+
+\begin{figure}
+\begin{lstlisting}
+int main(int argc, char **argv)
+{
+  Runtime::set_top_level_task_id(TOP_LEVEL_TASK_ID);
+
+  LayoutConstraintID column_major;
+  {
+    OrderingConstraint order(true/*contiguous*/);
+    order.ordering.push_back(DIM_X);
+    order.ordering.push_back(DIM_Y);
+    order.ordering.push_back(DIM_F);
+    LayoutConstraintRegistrar registrar;
+    registrar.add_constraint(order);
+    column_major = Runtime::preregister_layout(registrar);
+  }
+
+  LayoutConstraintID row_major;
+  {
+    OrderingConstraint order(true/*contiguous*/);
+    order.ordering.push_back(DIM_Y);
+    order.ordering.push_back(DIM_X);
+    order.ordering.push_back(DIM_F);
+    LayoutConstraintRegistrar registrar;
+    registrar.add_constraint(order);
+    row_major = Runtime::preregister_layout(registrar);
+  }
+
+  {
+    TaskVariantRegistrar registrar(TOP_LEVEL_TASK_ID, "top_level");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<top_level_task>(registrar, "top_level");
+  }
+
+  {
+    TaskVariantRegistrar registrar(INIT_MATRIX_TASK_ID, "init_matrix");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.add_layout_constraint_set(0, column_major); 
+    registrar.set_leaf();
+    Runtime::preregister_task_variant<init_matrix_task>(registrar, "init_matrix");
+  }
+
+  {
+    TaskVariantRegistrar registrar(TRANSPOSE_MATRIX_TASK_ID, "transpose");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.add_layout_constraint_set(0, column_major);
+    registrar.add_layout_constraint_set(1, row_major);
+    registrar.set_leaf();
+    Runtime::preregister_task_variant<transpose_matrix_task>(registrar, "transpose");
+  }
+
+  {
+    TaskVariantRegistrar registrar(CHECK_MATRIX_TASK_ID, "check_matrix");
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.add_layout_constraint_set(0, column_major);
+    registrar.set_leaf();
+    Runtime::preregister_task_variant<check_matrix_task>(registrar, "check_matrix");
+  }
+
+  return Runtime::start(argc, argv);
+}
+\end{lstlisting}
+\caption{The {\tt main} function from {\tt legion/examples/layout\_constraints/transpose.cc}.}
+\label{fig:layout}
+\end{figure}
+
+Figure~\ref{fig:layout} shows the {\tt main} function from one of the examples in the Legion repository.  The function first defines two layout constraints, named {\tt column\_major} (lines 5-14) and {\tt row\_major} (liines 16-25).
+The constants {\tt DIM\_X}, {\tt DIM\_Y} and {\tt DIM\_Z} are distinguished names given to the first three dimensions of an index space; {\tt DIM\_F} stands for all the fields of a region. An {\tt OrderingConstraint}
+specifies which dimension varies the fastest in a region's layout: In {\tt column\_major} it is the {\tt x} dimension, in {\tt row\_major} it is the {\tt y} dimension.  The {\tt z} and higher dimensions are ignored here
+because the regions involved for this application are two dimensional.   Note that these are struct-of-array layouts; by putting the field dimension first we could specify array-of-struct layouts as well.
+
+To use a layout constraint we associate it with a region argument of a task.  When the {\tt transpose\_matrix\_task} is registered (lines 42-47), the first region argument (region 0) is constrained to be in {\tt column\_major} layout while the
+second region argument (region 1) is constrained to be in {\tt row\_major} layout.  When the task is run the runtime system ensures that the physical instances used by the task adhere to any layout constraints.
+
+It is also possible to specify blocked layouts. See the declarations and comments in {\tt legion/runtime/legion/legion\_constraint.h}.
+
+Layout constrains are most commonly used in two situations. First, the code for a task may require a certain layout.  For example, vectorized code will necessarily require that the vectorized dimension be the fastest varying.  Second, when interoperating with
+external systems, by using layout constraints the Legion system can describe what the layout of the pre-existing data is, allowing the runtime to correctly interpret it and work with it without making unnecesssary copies.
+

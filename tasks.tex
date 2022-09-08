@@ -84,7 +84,10 @@ task to the runtime:
 
 \item The kind of processor the task can run on is the second argument.  The most important options are
 {\em latency optimized cores} or CPUs (constant {\tt LOC}) and {\em throughput optimized cores} or GPUs
-(constant {\tt TOC}).
+(constant {\tt TOC}).  Declaring the processor kind for a task is an example of a {\em constraint}.
+Legion has an extensive system of constraints that can be used to direct the Legion runtime 
+in running a Legion program.  There are other kinds of constraints that can be specified for tasks, but
+the processor kind is the most commonly used.
 
 \item Two boolean flags, the first of which indicates whether the task can be used in a single task
 launch and the second of which indicates whether the task can be used in a multiple (or {\em index}) task
