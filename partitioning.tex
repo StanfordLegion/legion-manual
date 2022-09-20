@@ -94,6 +94,8 @@ The execution of the launcher on line 28 runs {\tt sum\_task} on all the subregi
 
 An equal partition is an example of a mathematical partition: an equal partition is always both disjoint (none of the subregions overlap) and complete (every element of the region is included in some subregion).
 
+The runtime does not guarantee anything about equal partitions other than that the subreqions will be of approximately the same size.  At the time of this writing, for example, an equal partition of a multidimensional region will partition the region in just the first dimension.  If a specific kind of equal partition is desired other partitioning operators can be used.  For example, a blocked partition can be created with partition by restriction (see Section~\ref{sec:pbr}).
+
 
 
 

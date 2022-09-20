@@ -13,10 +13,6 @@ enum FieldIDs {
   FIELD_A,
 };
 
-PhaseBarrier odd;
-PhaseBarrier even;
-
-
 void top_level_task(const Task *task,
 		    const std::vector<PhysicalRegion> &rgns,
 		    Context ctx, 
@@ -32,6 +28,8 @@ void top_level_task(const Task *task,
 
   LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
   
+  PhaseBarrier odd = rt->create_phase_barrier(ctx,1);
+  PhaseBarrier even = rt->create_phase_barrier(ctx,1);
 
   for (int i = 0; i < 10; i++) {
     odd = rt->advance_phase_barrier(ctx,odd);
@@ -67,12 +65,14 @@ void top_level_task(const Task *task,
 
     ReleaseLauncher rl_consumer(lr,lr);
     rl_consumer.add_field(FIELD_A);
-    if (i < 9)
-      rl_consumer.add_arrival_barrier(odd);
+    rl_consumer.add_arrival_barrier(odd);
     rt->issue_release(ctx,rl_consumer);
 
     printf("Iteration %d of top level task.\n",i);
   }
+  printf("Deallocating phase barriers.\n");
+  rt->destroy_phase_barrier(ctx,odd);
+  rt->destroy_phase_barrier(ctx,even);
 }
   
 void producer_task(const Task *task,
@@ -82,11 +82,11 @@ void producer_task(const Task *task,
   int i = *((int *) task->args);
   const FieldAccessor<READ_WRITE,int,1> fa_a(rgns[0], FIELD_A);
   Rect<1> d = rt->get_index_space_domain(ctx,task->regions[0].region.get_index_space());
-  printf("Wrote %d to the buffer\n",i);
   for (PointInRectIterator<1> itr(d); itr(); itr++)
     {
       fa_a[*itr] = i;
     }
+  printf("Wrote %d to the buffer\n",i);
 }
 
 void consumer_task(const Task *task,
