@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '35 8 * * 2' # once a week on Tuesday
+
+jobs:
+  latex:
+    name: Latex
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./ci.sh
+        shell: bash
+        env:
+          TEST_LATEX: 1
+      - uses: actions/upload-artifact@v2
+        with:
+          name: legion-manual
+          path: |
+            *.pdf

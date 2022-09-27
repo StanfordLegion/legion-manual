@@ -1,0 +1,15 @@
+# Build image for Latex
+
+FROM ubuntu:22.04
+
+MAINTAINER Elliott Slaughter <slaughter@cs.stanford.edu>
+
+ENV DEBIAN_FRONTEND noninteractive
+
+COPY . /build
+
+RUN apt-get update -qq && \
+    apt-get install -qq make texlive && \
+    apt-get clean
+
+RUN cd /build && make
