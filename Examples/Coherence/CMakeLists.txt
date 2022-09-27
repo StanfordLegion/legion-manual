@@ -1,0 +1,3 @@
+add_subdirectory(atomic)
+add_subdirectory(simultaneous)
+add_subdirectory(simultaneous_simple)

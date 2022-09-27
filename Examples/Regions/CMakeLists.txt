@@ -1,0 +1,5 @@
+add_subdirectory(atomic)
+add_subdirectory(fillfields)
+add_subdirectory(inlinemapping)
+add_subdirectory(logicalregions)
+add_subdirectory(physicalregions)

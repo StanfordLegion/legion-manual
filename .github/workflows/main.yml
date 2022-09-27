@@ -20,3 +20,16 @@ jobs:
           name: legion-manual
           path: |
             *.pdf
+  cxx:
+    name: C++
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ['stable', 'master']
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./ci.sh
+        shell: bash
+        env:
+          TEST_CXX: 1
+          LEGION_BRANCH: ${{ matrix.branch }}

@@ -1,0 +1,6 @@
+add_subdirectory(domains)
+add_subdirectory(futures)
+add_subdirectory(indexlaunch)
+add_subdirectory(subtasks)
+add_subdirectory(sum)
+add_subdirectory(sumtree)

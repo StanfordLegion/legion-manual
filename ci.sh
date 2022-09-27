@@ -8,3 +8,7 @@ if [[ -n $TEST_LATEX ]]; then
     docker cp $tmp:/build/legion.pdf .
     docker rm $tmp
 fi
+
+if [[ -n $TEST_CXX ]]; then
+    docker build --build-arg LEGION_BRANCH=$LEGION_BRANCH -f docker/Dockerfile.cxx -t build .
+fi

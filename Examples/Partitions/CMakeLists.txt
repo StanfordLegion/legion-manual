@@ -1,0 +1,6 @@
+add_subdirectory(equal)
+add_subdirectory(image)
+add_subdirectory(partition_by_field)
+add_subdirectory(partition_by_restriction)
+add_subdirectory(pre_image)
+add_subdirectory(sets)

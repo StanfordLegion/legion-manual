@@ -1,6 +1,3 @@
-## Editor temporary files:
-*~
-
 ## Core latex/pdflatex auxiliary files:
 /legion.pdf
 *.aux
@@ -182,3 +179,16 @@ TSWLatexianTemp*
 
 # KBibTeX
 *~[0-9]*
+
+# Emacs
+*~
+
+## C++ build output:
+*.o
+*.a
+*.d
+*_defines.h
+
+## C++ build directories:
+/legion
+/Examples/build

@@ -42,6 +42,7 @@ void top_level_task(const Task *task,
   sum_launcher.add_region_requirement(RegionRequirement(lr, READ_ONLY, EXCLUSIVE, lr));
   sum_launcher.add_field(0,FIELD_A);
   rt->execute_task(ctx, sum_launcher);
+}
 
 void inc_task(const Task *task,
 		    const std::vector<PhysicalRegion> &rgns,
