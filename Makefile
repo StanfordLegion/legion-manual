@@ -15,7 +15,7 @@ INCLUDED_FIGS =
 
 all: $(DOC).pdf 
 
-$(DOC).pdf: $(DOC).tex bibliography.bib $(INCLUDED_TEX) $(INCLUDED_FIGS)
+$(DOC).pdf: $(DOC).tex bibliography.bib date_and_version.tex $(INCLUDED_TEX) $(INCLUDED_FIGS)
 
 
 %.pdf: %.tex bibliography.bib
@@ -30,6 +30,9 @@ $(DOC).pdf: $(DOC).tex bibliography.bib $(INCLUDED_TEX) $(INCLUDED_FIGS)
 %.pdf: %.tex
 	pdflatex -halt-on-error $*.tex
 	pdflatex -halt-on-error $*.tex
+
+date_and_version.tex: get_date_and_version.py
+	./get_date_and_version.py > date_and_version.tex
 
 spelling :
 	for f in *.tex; do aspell -p ./aspell.en.pws --repl=./aspell.en.prepl -c $$f; done

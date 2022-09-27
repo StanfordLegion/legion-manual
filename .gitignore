@@ -11,6 +11,7 @@
 *.fot
 *.cb
 *.cb2
+/date_and_version.tex
 
 ## Intermediate documents:
 *.dvi
