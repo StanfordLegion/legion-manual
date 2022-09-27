@@ -25,50 +25,35 @@ void top_level_task(const Task *task,
   FieldID fida = field_allocator.allocate_field(sizeof(int), FIELD_A);
   assert(fida == FIELD_A);
 
-  LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
 
+  LogicalRegion lr = rt->create_logical_region(ctx,is,fs);
+  
   PhaseBarrier odd = rt->create_phase_barrier(ctx,1);
   PhaseBarrier even = rt->create_phase_barrier(ctx,1);
 
   for (int i = 0; i < 10; i++) {
-    PhaseBarrier odd_next = rt->advance_phase_barrier(ctx,odd);
-    PhaseBarrier even_next = rt->advance_phase_barrier(ctx,even);
 
     /* Producer task */
-    AcquireLauncher al_producer(lr,lr);
-    al_producer.add_field(FIELD_A);
-    if (i > 0)
-      al_producer.add_wait_barrier(odd_next);
-    rt->issue_acquire(ctx,al_producer);
-    
     TaskLauncher producer_launcher(PRODUCER_TASK_ID, TaskArgument(&i,sizeof(int)));
     producer_launcher.add_region_requirement(RegionRequirement(lr, WRITE_DISCARD, SIMULTANEOUS, lr));
     producer_launcher.add_field(0,FIELD_A);
+    if (i > 0)
+      producer_launcher.add_wait_barrier(odd);
+    producer_launcher.add_arrival_barrier(even);
     rt->execute_task(ctx, producer_launcher);
 
-    ReleaseLauncher rl_producer(lr,lr);
-    rl_producer.add_field(FIELD_A);
-    rl_producer.add_arrival_barrier(even);
-    rt->issue_release(ctx,rl_producer);    
+    even = rt->advance_phase_barrier(ctx,even);
 
     /* Consumer task */
-    AcquireLauncher al_consumer(lr,lr);
-    al_consumer.add_field(FIELD_A);
-    al_consumer.add_wait_barrier(even_next);
-    rt->issue_acquire(ctx,al_consumer);
-
     TaskLauncher consumer_launcher(CONSUMER_TASK_ID, TaskArgument(NULL,0));
     consumer_launcher.add_region_requirement(RegionRequirement(lr, READ_WRITE, SIMULTANEOUS, lr));
     consumer_launcher.add_field(0,FIELD_A);
+    consumer_launcher.add_wait_barrier(even);
+    consumer_launcher.add_arrival_barrier(odd);
     rt->execute_task(ctx, consumer_launcher);
 
-    ReleaseLauncher rl_consumer(lr,lr);
-    rl_consumer.add_field(FIELD_A);
-    rl_consumer.add_arrival_barrier(odd);
-    rt->issue_release(ctx,rl_consumer);
+    odd = rt->advance_phase_barrier(ctx,odd);
 
-    odd = odd_next;
-    even = even_next;
     printf("Iteration %d of top level task.\n",i);
   }
   printf("Deallocating phase barriers.\n");
@@ -117,12 +102,12 @@ int main(int argc, char **argv)
   {
     TaskVariantRegistrar registrar(PRODUCER_TASK_ID, "producer_task");
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<producer_task>(registrar);
+    Runtime::preregister_task_variant<producer_task>(registrar, "producer_task");
   }
   {
     TaskVariantRegistrar registrar(CONSUMER_TASK_ID, "consumer_task");
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<consumer_task>(registrar);
+    Runtime::preregister_task_variant<consumer_task>(registrar, "consumer_task");
   }  
   return Runtime::start(argc, argv);
 }
