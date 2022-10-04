@@ -1,21 +1,6 @@
 \chapter{Tasks}
 \label{chap:tasks}
 
-% Set up the listing configuration for everything
-\lstset{
-  captionpos=b,
-  language=C++,
-  basicstyle=\scriptsize,
-  numbers=left,
-  numberstyle=\tiny,
-  columns=fullflexible,
-  stepnumber=1,
-  escapechar=\#,
-  keepspaces=true,
-  literate={<}{{$\langle$}}1 {>}{{$\rangle$}}1,
-  %xleftmargin=15pt,
-}
-
 The Legion runtime is a \Cpp\ library, and
 Legion programs are just C++ programs that use the Legion runtime API.
 One important consequence of this design is that almost all Legion decisions
@@ -39,22 +24,18 @@ not migrate mid-computation.
 
 \end{itemize}
 
-
 \begin{figure}
-  {\small
-    \lstinputlisting{Examples/Tasks/sum/sum.cc}
-  }
+\lstinputlisting[language=C++]{Examples/Tasks/sum/sum.cc}
 \caption{\legionbook{Tasks/sum/sum.cc}}
 \label{fig:simple}
 \end{figure}
 
 Figure~\ref{fig:simple} shows a very simple, but complete, Legion program for summing
 the first 1000 positive integers (also available as {\tt sum.cc} in \legionbook{Tasks}).
-This example, like every other example in this manual, can be run by first setting an environment variable to point to the Legion runtime
-\begin{verbatim}
-export LG_RT_DIR="...path to legion directory.../legion/runtime"
-\end{verbatim}
-and then typing {\tt make} in the directory containing the example.
+This example, like every other example in this manual, can be run by completing the installation instructions in Chapter~\ref{chap:start} and then running:
+\begin{lstlisting}[language=bash,style=inline]
+./build/sum
+\end{lstlisting}
 
 At a high level, every Legion program has three components:
 \begin{itemize}
@@ -131,9 +112,7 @@ should not directly manipulate the context.
 
 
 \begin{figure}
-  {\small
-    \lstinputlisting{Examples/Tasks/subtasks/subtasks.cc}
-    }
+\lstinputlisting[language=C++]{Examples/Tasks/subtasks/subtasks.cc}
 \caption{\legionbook{Tasks/subtasks/subtasks.cc}}
 \label{fig:subtask}
 \end{figure}
@@ -199,8 +178,7 @@ task waits until all the child tasks terminate, at which point
 \label{sec:futures}
 
 \begin{figure}
-  {\small
-    \lstinputlisting[linerange={14-48}]{Examples/Tasks/futures/futures.cc}}
+\lstinputlisting[language=C++,linerange={14-48}]{Examples/Tasks/futures/futures.cc}
 \caption{\legionbook{Tasks/futures/futures.cc}}
 \label{fig:futures}
 \end{figure}
@@ -270,31 +248,31 @@ Legion for defining {\em points}, {\em rectangles} and {\em domains}.
 
 A {\em point} is an n-tuple of integers.  The {\tt Point} constructor, which is templated on the
 dimension $n$,  is used to create points:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 Point<1> one(1);        // The 1 dimensional point <1>
 Point<1> two(2);        // The 1 dimensional point <2>
 Point<2> zeroes(0,0);   // The 2 dimensional point <0,0>
 Point<2> twos(2,2);     // The 2 dimensional point <2,2>
 Point<2> threes(3,3);   // The 2 dimensional point <3,3>
 Point<3> fours(4,4,4);  // The 3 dimensional point <4,4,4>
-\end{verbatim}
+\end{lstlisting}
 
 There are many operations defined on points.  For example, points can be summed:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 twos + threes  // the point <5,5>
-\end{verbatim}
+\end{lstlisting}
 and one can take the dot product of two points:             
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 twos.dot(threes)  // the integer 12
-\end{verbatim}
+\end{lstlisting}
 The following are true:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 twos == twos   
 twos != threes 
-\end{verbatim}
+\end{lstlisting}
 A pair of points $a$ and $b$ defines a {\em rectangle} that includes all the points that are greater than or equal to $a$
 and less than or equal to $b$.  For example:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 // the points  <0,0> <0,1> <0,2> <0,3> 
 //             <1,0> <1,1> <1,2> <1,3>
 //             <2,0> <2,1> <2,2> <2,3>
@@ -304,19 +282,19 @@ Rect<2> big(zeroes,threes);
 // the points  <2,2> <2,3>
 //             <3,2> <3,3>
 Rect<2> small(twos,threes);
-\end{verbatim}
+\end{lstlisting}
 There are also many operations defined on rectangles.  A few examples, all of which evaluate to true:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 big != small                       
 big.contains(small)                
 small.overlaps(big)                
 small.intersection(big) == small   
-\end{verbatim}
+\end{lstlisting}
 Note that the intersection of two rectangles is always a rectangle.
 A {\em domain} is an alternative type for rectangles.  A {\tt Rect} can be converted to a {\tt Domain}:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 Domain bigdomain = big;
-\end{verbatim}
+\end{lstlisting}
 The difference between the two types is that {\tt Rect}s are templated on the dimension of the rectangle, while {\tt Domains}
 are not.  Legion runtime methods generally take {\tt Domain} arguments and use {\tt Domain}s internally, but for application
 code the extra type checking provided by the {\tt Rect} type (which ensures that the operations are applied to {\tt Rect} arguments
@@ -329,9 +307,9 @@ Analagous to {\tt Rect} and {\tt Domain}, there is a less-typed version of the t
 Again, the difference between the two types is that the {\tt Point} class is templated on the number of dimensions 
 while {\tt DomainPoint} is not.  For Legion methods that require a {\tt DomainPoint}, there is a function to convert a
 {\tt Point}:
-\begin{verbatim}
+\begin{lstlisting}[language=C++,style=inline]
 DomainPoint dtwos = twos;
-\end{verbatim}
+\end{lstlisting}
 As before, most Legion runtime calls take {\tt DomainPoints}, but programmers should probably prefer using the {\tt Point} type
 for the extra type checking provided.
 
@@ -351,8 +329,7 @@ index launches are for executing multiple instances of the same task
 where all of the task instances can run in parallel.
 
 \begin{figure}
-{\small
-\lstinputlisting[linerange={47-90}]{Examples/Tasks/indexlaunch/indexlaunch.cc}}
+\lstinputlisting[language=C++,linerange={47-90}]{Examples/Tasks/indexlaunch/indexlaunch.cc}
 \caption{\legionbook{Tasks/indexlaunch/indexlaunch.cc}}
 \label{fig:indexlaunch}
 \end{figure}
