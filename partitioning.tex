@@ -26,7 +26,7 @@ most common of these methods for partitioning data is the heart of this chapter.
 Partitions do not need to be mathematical partitions, in fact
 in Legion a partition can be {\em any} set of subsets of a region.
 It is important to keep in mind that partitions only name subsets of data;
-a partition does not allocated storage for the subregions or make copies of data.
+a partition does not allocate storage for the subregions or make copies of data.
 This feature of partitions leads to some useful programming idioms.  For example, a program
 can create a very large region, perhaps with billions of elements, and
 then partition it and only materialize needed subregions, which is useful
