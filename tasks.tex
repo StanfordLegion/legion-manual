@@ -171,7 +171,7 @@ futures (see Section~\ref{sec:futures}).
 
 A subtask is actually launched by the {\tt runtime->execute\_task}
 method, which requires both the parent task's context and the {\tt
-  TaskLauncher} object for the subtask as arguments.  Note that the
+  TaskLauncher} object for the subtask as arguments.  Note that
 the argument buffer pointed to by the {\tt TaskArgument} is copied
 only when {\tt execute\_task} is called. On the callee's side, note
 that the task arguments are available as a field of the {\tt task}
