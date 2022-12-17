@@ -219,7 +219,7 @@ set to processors or memories of interest.  These filters can include specializi
 the query to the local node using {\tt local\_address\_space}, to one kind of processors with the {\tt only\_kind} method, or by
 requesting that the processor or memory have a specific affinity to another
 processor or memory with the {\tt has\_affinity\_to} method. Affinity can either be
-specified as a minimum bandwidth or a maximum latency. Figure~\ref{fig:mapper_machine}
+specified as a maximum bandwidth or a minimum latency. Figure~\ref{fig:mapper_machine}
 shows how to create a custom mapper that uses queries to find the local set of 
 processors with the same processor kind as and the memories with affinities to the local
 mapper processor. In some cases, these queries are still expensive, so we
