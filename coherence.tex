@@ -56,7 +56,7 @@ in some circumstances improve performance, requiring shared memory is also less 
 and there needs to be concurrency between tasks to fully exploit the hardware. We have not found many such use cases in practice.
 
 The second use case is interoperating with external programs or other resources, where simultaneous coherence is the only safe model of data shared with an external process.
-Because this case is common and important, Legion encapsulates the most useful` interoperation patterns in higher level constructs described in Chapter~\ref{chap:interop} and we strongly
+Because this case is common and important, Legion encapsulates the most useful interoperation patterns in higher level constructs described in Chapter~\ref{chap:interop} and we strongly
 recommend using those abstractions if possible.
 These higher level abstractions are built on simultaneous coherence and the other concepts introduced in this section.
 
@@ -184,7 +184,7 @@ Thus, while there are simple cases where synchronization is unnecessary even in 
 \section{Relaxed}
 \label{sec:relaxed}
 
-The design of Legion includes one other coherencd mode, {\tt Relaxed}.
+The design of Legion includes one other coherence mode, {\tt Relaxed}.
 Relaxed coherence tells the runtime system that the application will
 handle all aspects of the correct use of data---there is no checking
 of any kind and all runtime support is disabled, allowing the
