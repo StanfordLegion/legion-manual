@@ -135,9 +135,9 @@ the {\tt Runtime::add\_mapper} methods support an optional processor
 argument, which tells the runtime to associate the mapper with a specific
 processor. If no processor is specified, the mapper is associated 
 with all processors on the local node. The choice between 
-one mapper object should handle a single application processor's
-mapping decisions one mapper object handling  mapping decisions for
-all application processors on a node is mapper-specfirc. Legion supports both use cases
+whether one mapper object should handle a single application processor's
+mapping decisions or one mapper object handling  mapping decisions for
+all application processors on a node is mapper-specific. Legion supports both use cases
 and it is up to custom mappers to make the best choice. From a performance
 perspective, the best choice is likely to depend on the mapper synchronization
 model (see Section~\ref{subsec:mapping:sync}).
