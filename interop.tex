@@ -8,7 +8,7 @@ In this chapter we briefly discuss the most common scenarios where Legion progra
 
 Legion has well-developed support for interoperation with MPI.  The essentials of the approach are:
 \begin{itemize}
-\item The top-level Legion task is control-replicated, with a number of shards equal to the number of ranks of MPI.
+\item The top-level Legion task is control-replicated, with the number of shards equal to the number of ranks of MPI.
 \item Legion and MPI time-slice the machine:  One of MPI or Legion is running at any given time, while the other runtime
   waits.
 \item Data can be shared between MPI and Legion by attaching an MPI buffer as a region with simultaneous coherence (with the correct layout constraint
@@ -118,7 +118,7 @@ There are a few command-line flags that affect the execution of Legion programs 
 \begin{itemize}
 
 \item {\tt -ll:ocpus n} sets the number of CPUs to be reserved for OpenMP to $n$.
-\item {\tt -ll:othr t} sets the njmber of threads per CPU to $t$.
+\item {\tt -ll:othr t} sets the number of threads per CPU to $t$.
 \item {\tt -ll:okindhack} exposes the master OpenMP thread as a CPU processor. This flag is useful when running with {\tt -ll:cpus 0} to give an extra processor to the OpenMP runtime; if there are some remaining CPU tasks they can be sent to the
     procesor running the master OpenMP thread using {\tt -ll:okindhack}.
 \item {\tt -ll:onuma} ensures that OpenMP cores are grouped by NUMA domain; a warning is printed if NUMA support is not found.
@@ -270,7 +270,7 @@ the convenience of having all of the Python facilities available outweighs what 
 Python tasks run on dedicated Python processors, for which Legion reserves a core to run
 the Python interpreter.
 
-There are numerous example so Pygion code illustrating the use of all of the Legion features in
+There are numerous examples of Pygion code illustrating the use of all of the Legion features in
 {\tt legion/bindings/python/examples}.  As an example, a simple ``hello, world'' program is in
 {\tt legion/bindings/python/examples/hello.py}:
 \begin{lstlisting}
