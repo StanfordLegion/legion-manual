@@ -278,8 +278,8 @@ This callback comes first because the fields of {\tt TaskOptions} control the re
 \item If {\tt valid\_instances} is set to false, then the task will not recieve a list of the currently valid instances of regions in subsequent calls to {\tt request\_valid\_instances}, which saves some runtime overhead.  This setting is useful if the task will never use
   a currently valid region instance, such as when all the regions of an inner task will be virtually mapped.
 
-\item Setting {\tt replicate\_default} to true turns on replication of single tasks when in a control-replication context, which means that the task will be executed separately in every Legion process participating in the replication of the parent task.  The default setting
-  is false; in this case only one instance of a single task with a conrol-replicated parent is executed on one processor and then the results are broadcast to the other Legion processes.  Replicating single tasks avoids the broadcast communication.  There are some restrictions on replicated single tasks to ensure the
+\item Setting {\tt replicate\_default} to true turns on replication of single tasks in a control-replication context, which means that the task will be executed separately in every Legion process participating in the replication of the parent task.  The default setting
+  is false; in this case only one instance of a single task with a control-replicated parent is executed on one processor and then the results are broadcast to the other Legion processes.  Replicating single tasks avoids the broadcast communication.  There are some restrictions on replicated single tasks to ensure the
   replicated versions all have identical behavior: the tasks cannot have reduction-only privileges on any field, and any fields with write privileges must use a separate instance for each replicated task.
 
 \item A task can set the priority of the parent task by modifying {\tt  output.parent\_priority}, if that is permitted by the mapper.  The default is the parent's current priority.  When tasks are ready to execute, tasks with higher priority are moved to the front of the ready queue.
