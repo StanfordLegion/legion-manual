@@ -414,7 +414,7 @@ struct MapTaskOutput {
 };
 \end{lstlisting}
 The input structure contains a vector of vector of valid instances: each element of the vector is a vector of instances that
-hold valid data for the corresponding region requirement.  The {\tt pre\_mapped} regions is a vector of indices of region
+hold valid data for the corresponding region requirement.  The {\tt premapped\_regions} is a vector of indices of region
 requirements that are already satisfied and do not need to be mapped by the callback.
 
 The callback must fill in the following fields of the {\tt output} structure:
