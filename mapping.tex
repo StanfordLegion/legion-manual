@@ -259,7 +259,7 @@ The signature of the function is:
                                    const Task&            task,
                                    TaskOptions&           output) = 0;
 \end{lstlisting}
-The purpose of the callback is to set fields of the {\tt output} object.  All of the fileds have defaults, so none are required to be set by the callback implementation.
+The purpose of the callback is to set fields of the {\tt output} object.  All of the fields have defaults, so none are required to be set by the callback implementation.
 This callback comes first because the fields of {\tt TaskOptions} control the rest of the mapping process for the task.
 \begin{itemize}
 \item For a single task $t$ (not an index launch), {\tt output.initial\_proc} is the processor that will execute $t$; the default is the current processor.
