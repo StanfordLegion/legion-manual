@@ -61,7 +61,7 @@ handles the case of a top-level task that is control-replicated and
 subtasks are sharded evenly and to the instance of the Legion runtime
 where they will execute.  Anything other than this simple, but very
 common, case will likely require writing some custom mapping
-logic.fixed.  Because the dynamic safety checks for control
+logic.  Because the dynamic safety checks for control
 replication do not currently cover every way that a task
 might fail to be replicable, it is possible, but unlikely, for a task that is
 incorrectly marked as replicable to pass the safety checks.
