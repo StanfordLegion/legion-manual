@@ -12,7 +12,7 @@ enum TaskID {
 
 void print_point(DomainPoint d) {
   printf("The point is <");
-  for(int i = 0; i <= d.dim - 1; i++) 
+  for(int i = 0; i < d.dim - 1; i++) 
     printf("%lld,",d[i]);
   if (d.dim > 0) 
     printf("%lld>\n",d[d.dim-1]);
