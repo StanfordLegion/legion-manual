@@ -56,8 +56,7 @@ example simply shows how to create, and then destroy, a logical
 region.
 
 \begin{figure}
-{\small
-  \lstinputlisting[linerange={19-38}]{Examples/Regions/logicalregions/logicalregions.cc}}
+\lstinputlisting[language=C++,linerange={19-38}]{Examples/Regions/logicalregions/logicalregions.cc}
 \caption{\legionbook{Regions/logicalregions/logicalregions.cc}}
 \label{fig:lr1}
 \end{figure}
@@ -77,8 +76,7 @@ the programmer can specify other semantics if desired; see
 Chapter~\ref{chap:coherence}.
 
 \begin{figure}
-{\small
-  \lstinputlisting[linerange={31-39}]{Examples/Regions/physicalregions/physicalregions.cc}}
+\lstinputlisting[language=C++,linerange={31-39}]{Examples/Regions/physicalregions/physicalregions.cc}
 \caption{Task launches from \legionbook{Regions/physicalregions/physicalregions.cc.}}
 \label{fig:privileges}
 \end{figure}
@@ -142,8 +140,7 @@ are numbered from 0 in the order they are added to the launcher) and a single fi
 accessed by the subtask.
 
 \begin{figure}
-  {\small
-  \lstinputlisting[linerange={63-75}]{Examples/Regions/physicalregions/physicalregions.cc}}
+  \lstinputlisting[language=C++,linerange={63-75}]{Examples/Regions/physicalregions/physicalregions.cc}
 \caption{Region accessors from \legionbook{Regions/physicalregions/physicalregions.cc}.}
 \label{fig:accessors}
 \end{figure}
@@ -203,8 +200,7 @@ to the one in Figure~\ref{fig:accessors}, except that the initialization task ha
 the runtime that fills every occurrence of {\tt FIELD\_A} with a default value.
 
 \begin{figure}
-  {\small
-  \lstinputlisting[linerange={28-31}]{Examples/Regions/fillfields/fillfields.cc}}
+  \lstinputlisting[language=C++,linerange={28-31}]{Examples/Regions/fillfields/fillfields.cc}
 \caption{\legionbook{Regions/fillfields/fillfields.cc}}
 \label{fig:fill}
 \end{figure}
@@ -256,9 +252,9 @@ instance to become valid before it can be used.
 
 \begin{figure}
 {\small
-  \lstinputlisting[linerange={26-29}]{Examples/Regions/inlinemapping/inlinemapping.cc}
+  \lstinputlisting[language=C++,linerange={26-29}]{Examples/Regions/inlinemapping/inlinemapping.cc}
   ... lines omitted ...\\
-  \lstinputlisting[linerange={43-44}]{Examples/Regions/inlinemapping/inlinemapping.cc}}
+  \lstinputlisting[language=C++,linerange={43-44}]{Examples/Regions/inlinemapping/inlinemapping.cc}}
 \caption{\legionbook{Regions/inlinemapping/inlinemapping.cc}}
 \label{fig:inlinelaunch}
 \end{figure}

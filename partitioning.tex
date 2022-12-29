@@ -100,9 +100,7 @@ The runtime does not guarantee anything about equal partitions other than that t
 
 
 \begin{figure}
-  {\small
-   \lstinputlisting[linerange={15-49}]{Examples/Partitions/equal/equal.cc}
-  }
+  \lstinputlisting[language=C++,linerange={15-49}]{Examples/Partitions/equal/equal.cc}
   \caption{\legionbook{Partitions/equal/equal.cc}}
   \label{fig:equalpart}
 \end{figure}
@@ -130,9 +128,7 @@ On line 29 the partition of the index space is used to retrieve the logical part
 The logic for launching the {\tt sum\_task} over the paritition on lines 31-35 is the same as in Figure~\ref{fig:equalpart}.
 
 \begin{figure}
-  {\small
-   \lstinputlisting[linerange={17-74}]{"Examples/Partitions/partition_by_field/pbf.cc"}
-  }
+  \lstinputlisting[language=C++,linerange={17-74}]{"Examples/Partitions/partition_by_field/pbf.cc"}
   \caption{\legionbook{Partitions/partition\_by\_field/pbf.cc}}
   \label{fig:pbf}
 \end{figure}
@@ -168,9 +164,7 @@ Figure~\ref{fig:pbr} gives code for computing the partitioning shown in Figure~\
   of the subregion---for a region with an index space 0..99, it is necessary that the color space be $0..3$ and not some other set of four points.
 
 \begin{figure}
-  {\small
-   \lstinputlisting[linerange={15-49}]{"Examples/Partitions/partition_by_restriction/pbr.cc"}
-  }
+  \lstinputlisting[language=C++,linerange={15-49}]{"Examples/Partitions/partition_by_restriction/pbr.cc"}
   \caption{\legionbook{Partitions/partition\_by\_restriction/pbr.cc}}
   \label{fig:pbr}
 \end{figure}
@@ -199,9 +193,7 @@ partitioning functions have the same signature as {\tt
 
 
 \begin{figure}
-  {\small
-   \lstinputlisting[linerange={21-58}]{Examples/Partitions/sets/sets.cc}
-  }
+  \lstinputlisting[language=C++,linerange={21-58}]{Examples/Partitions/sets/sets.cc}
   \caption{\legionbook{Partitions/sets/sets.cc}}
   \label{fig:sets}
 \end{figure}
@@ -235,9 +227,7 @@ The {\tt create\_partition\_by\_image} call on line 38 takes the current context
 The rest of the program (lines 41-45) sums the value field of the destination partition's subregions (which as in other examples has the same value 1 for every element).  Since the 1-1 pointer relationship copies the coloring exactly from source to destination and the source was an equal partition, the sums printed for each subregion are the same.
 
 \begin{figure}
-  {\small
-    \lstinputlisting[linerange={17-76}]{Examples/Partitions/image/image.cc}
-  }
+  \lstinputlisting[language=C++,linerange={17-76}]{Examples/Partitions/image/image.cc}
   \caption{\legionbook{Partitions/image/image.cc}}
   \label{fig:image}
 \end{figure}
@@ -268,9 +258,7 @@ Returning to the program in Figure~\ref{fig:preimage}, lines 38-43 sum the eleme
 
 
 \begin{figure}
-  {\small
-   \lstinputlisting[linerange={17-74}]{"Examples/Partitions/pre_image/preimage.cc"}
-  }
+  \lstinputlisting[language=C++,linerange={17-74}]{"Examples/Partitions/pre_image/preimage.cc"}
   \caption{\legionbook{Partitions/pre\_image/preimage.cc}}
   \label{fig:preimage}
 \end{figure}

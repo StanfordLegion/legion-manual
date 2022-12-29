@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND noninteractive
 COPY . /build
 
 RUN apt-get update -qq && \
-    apt-get install -qq git make texlive && \
+    apt-get install -qq git make texlive texlive-fonts-extra && \
     apt-get clean
 
 RUN cd /build && make

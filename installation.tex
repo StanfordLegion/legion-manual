@@ -3,18 +3,42 @@
 
 The Legion homepage is \url{https://legion.stanford.edu}.  Here you will find
 links to everything associated with the project, including a set of
-tutorials that are distinct from this manual.  The Legion distribution is at
+tutorials that are distinct from this manual.  The Legion software distribution is at
 \url{https://github.com/StanfordLegion/legion}.  The distribution has been
-tested on Linux and macOS.  To install, in a shell type
-\begin{lstlisting}
-> cd DIR
-> git clone https://github.com/StanfordLegion/legion
+tested on Linux and macOS.
+
+To install Legion, open a shell and type:
+
+\begin{lstlisting}[language=bash,style=inline]
+git clone https://github.com/StanfordLegion/legion.git
+cd legion
+mkdir build install
+cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install
+make install -j4
+cd ../..
 \end{lstlisting}
-where {\tt DIR} is a directory of your choice.  This command creates 
-the directory {\tt DIR/legion}.  To complete the installation,
-set the environment variable {\tt LG\_RT\_DIR} to {\tt DIR/legion/runtime}.
-For {\tt bash} users, an example {\tt .bashrc} is included in
-\legionbook{Installation}.
+
+This installs Legion into the directory
+\lstinline{legion/install}. Note that by default, a debug build is
+created. To build a release copy of Legion, add
+\lstinline{-DCMAKE_BUILD_Type=Release} the the \lstinline{cmake}
+command. (A debug build is strongly recommended when initially
+developing with Legion, as it enables a number of checks for correct
+usage of Legion APIs, in addition to enabling debug symbols.)
+
+The examples in this manual can then be downloaded and built with:
+
+\begin{lstlisting}[language=bash,style=inline]
+git clone https://github.com/StanfordLegion/legion-manual.git
+cd legion-manual
+mkdir build
+cmake ../Examples -DCMAKE_PREFIX_PATH=$PWD/../../legion/install
+make -j4
+\end{lstlisting}
+
+All of the examples in this manual are included in the build, and will
+be located under the \lstinline{legion-manual/build} directory.
 
 \section{Regent}
 
